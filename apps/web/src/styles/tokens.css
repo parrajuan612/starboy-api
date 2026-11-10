@@ -1,0 +1,100 @@
+/* ── Paleta de marca (Manual de marca) ───────────────────────── */
+:root {
+  --sb-ink: #05080F;
+  --sb-ink-raised: #0C1018;
+  --sb-navy: #182062;
+  --sb-navy-deep: #141844;
+  --sb-ice: #5F7DAD;
+  --sb-paper: #F3F3F3;
+  --sb-white: #FFFFFF;
+}
+
+/* ── Tema Catálogo (claro) — por defecto ─────────────────────── */
+:root,
+.theme-catalog {
+  --surface: var(--sb-paper);
+  --surface-raised: var(--sb-white);
+  --ink: #05080F;            /* (p) */
+  --ink-muted: #5A6070;      /* (p) */
+  --line: #E2E2E2;           /* (p) */
+  --line-strong: #C9CBD1;    /* (p) */
+  --brand: var(--sb-navy);
+  --brand-hover: #222B7A;    /* (p) */
+  --on-brand: #FFFFFF;       /* (p) */
+  --accent: var(--sb-ice);
+  --focus-ring: #5F7DAD;     /* (p) */
+  --success: #1E7A46;        /* (p) */
+  --danger: #B42318;         /* (p) */
+}
+
+/* ── Tema Editorial (oscuro) ─────────────────────────────────── */
+.theme-editorial {
+  --surface: var(--sb-ink);
+  --surface-raised: var(--sb-ink-raised);
+  --ink: #FFFFFF;            /* (p) */
+  --ink-muted: #9AA1AE;      /* (p) */
+  --line: #1A2030;           /* (p) */
+  --line-strong: #2A3142;    /* (p) */
+  --success: #4ADE80;        /* (p) */
+  --danger: #F87171;         /* (p) */
+}
+
+/* ── Tokens para Tailwind (utilidades bg-*, text-*, border-*…) ─ */
+@theme inline {
+  --color-sb-ink: var(--sb-ink);
+  --color-sb-ink-raised: var(--sb-ink-raised);
+  --color-sb-navy: var(--sb-navy);
+  --color-sb-navy-deep: var(--sb-navy-deep);
+  --color-sb-ice: var(--sb-ice);
+  --color-sb-paper: var(--sb-paper);
+  --color-sb-white: var(--sb-white);
+
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-on-brand: var(--on-brand);
+  --color-accent: var(--accent);
+  --color-brand-accent: var(--accent); /* alias usado por el Logo: el acento ice del manual */
+  --color-focus-ring: var(--focus-ring);
+  --color-success: var(--success);
+  --color-danger: var(--danger);
+
+  --font-display: var(--font-oswald), "Arial Narrow", sans-serif;
+  --font-text: var(--font-barlow), Arial, sans-serif;
+
+  --radius-sm: 2px;          /* (p) */
+  --radius-md: 4px;          /* (p) */
+  --shadow-drawer: 0 16px 48px rgb(5 8 15 / 0.28); /* (p) */
+}
+
+/* ── Estilos tipográficos del manual (tamaños (p)) ───────────── */
+@utility display-xl  { font-family: var(--font-display); font-size: 88px; line-height: 1;    font-weight: 700; text-transform: uppercase; }
+@utility display-lg  { font-family: var(--font-display); font-size: 56px; line-height: 1;    font-weight: 700; text-transform: uppercase; }
+@utility display-md  { font-family: var(--font-display); font-size: 36px; line-height: 1.1;  font-weight: 600; text-transform: uppercase; }
+@utility display-sm  { font-family: var(--font-display); font-size: 24px; line-height: 1.15; font-weight: 600; text-transform: uppercase; }
+@utility label       { font-family: var(--font-display); font-size: 13px; line-height: 16px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; }
+@utility title       { font-family: var(--font-text); font-size: 20px; line-height: 26px; font-weight: 600; }
+@utility price-lg    { font-family: var(--font-text); font-size: 28px; line-height: 32px; font-weight: 600; font-variant-numeric: tabular-nums; }
+@utility body        { font-family: var(--font-text); font-size: 16px; line-height: 24px; font-weight: 400; }
+@utility body-strong { font-family: var(--font-text); font-size: 16px; line-height: 24px; font-weight: 600; }
+@utility body-sm     { font-family: var(--font-text); font-size: 14px; line-height: 20px; font-weight: 400; }
+@utility caption     { font-family: var(--font-text); font-size: 12px; line-height: 16px; font-weight: 500; }
+
+/* Escala móvil: el hero baja a display-lg; secciones quedan en display-md */
+@media (max-width: 767px) {
+  .display-lg { font-size: 44px; }
+  .display-md { font-size: 28px; line-height: 32px; }
+  .title      { font-size: 18px; line-height: 24px; }
+  .price-lg   { font-size: 24px; line-height: 28px; }
+}
+
+/* Foco de teclado visible en ambos temas */
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}

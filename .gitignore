@@ -1,0 +1,29 @@
+# Secretos y configuración local (los .env.example SÍ se versionan)
+.env
+.env.*
+!.env.example
+
+# Node / Next
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+next-env.d.ts
+
+# Go
+*.exe
+*.test
+*.out
+/apps/api/bin/
+/apps/api/starboy-server
+/apps/api/server
+
+# Logs, editores, SO
+*.log
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Pruebas E2E y capturas locales
+scratchpad/

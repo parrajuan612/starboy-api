@@ -1,0 +1,24 @@
+import { CartDrawer } from "@/components/cart/CartDrawer";
+import { CartEffects } from "@/components/cart/CartEffects";
+import { Footer } from "@/components/layout/Footer";
+import { Navbar } from "@/components/layout/Navbar";
+import { TopBar } from "@/components/layout/TopBar";
+import { getMenuSource } from "@/lib/catalog-server";
+
+// Las páginas de la tienda se regeneran cada 5 min (300 s, igual a MENU_REVALIDATE; Next exige un literal aquí):
+// el menú sigue lo que haya en la base sin redeploy.
+export const revalidate = 300;
+
+export default async function StoreLayout({ children }: { children: React.ReactNode }) {
+  const menu = await getMenuSource();
+  return (
+    <>
+      <TopBar />
+      <Navbar menu={menu} />
+      <main className="min-h-[60dvh]">{children}</main>
+      <Footer />
+      <CartDrawer />
+      <CartEffects />
+    </>
+  );
+}

@@ -1,0 +1,73 @@
+/* Clases sb-* de componentes: usan solo tokens (RNF-11). Se completa con cada componente. */
+.sb-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 48px; padding: 0 24px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-display); font-size: 13px; font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.06em;
+}
+.sb-btn--primary   { background: var(--brand); color: var(--on-brand); }
+.sb-btn--primary:hover { background: var(--brand-hover); }
+.sb-btn--secondary { background: transparent; color: var(--ink); border: 1px solid var(--line-strong); }
+
+.sb-product-card { background: var(--surface-raised); border: 1px solid var(--line); border-radius: 0; }
+.sb-product-card:hover { border-color: var(--line-strong); }
+
+.sb-size-selector button {
+  min-width: 44px; min-height: 44px;
+  border: 1px solid var(--line-strong); border-radius: var(--radius-sm);
+  color: var(--ink); background: var(--surface-raised);
+}
+.sb-size-selector button[aria-pressed="true"] { background: var(--brand); color: var(--on-brand); border-color: var(--brand); }
+.sb-size-selector button[aria-disabled="true"] { color: var(--ink-muted); text-decoration: line-through; cursor: not-allowed; }
+
+.sb-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px; border-radius: var(--radius-sm);
+  font-family: var(--font-display); font-size: 12px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; }
+.sb-badge--discount      { background: var(--brand); color: var(--on-brand); }
+.sb-badge--brand-outline { border: 1px solid var(--brand); color: var(--brand); }
+.sb-badge--success       { border: 1px solid var(--success); color: var(--success); }
+.sb-badge--danger        { border: 1px solid var(--danger); color: var(--danger); }
+.sb-badge--neutral       { border: 1px solid var(--line-strong); color: var(--ink-muted); }
+
+.sb-btn[disabled], .sb-btn[aria-busy="true"] { opacity: 0.6; cursor: not-allowed; }
+
+/* Formularios */
+.sb-label {
+  display: block; margin-bottom: 6px;
+  font-family: var(--font-display); font-size: 13px; line-height: 16px; font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.06em;
+}
+.sb-input {
+  width: 100%; min-height: 48px; padding: 0 14px;
+  background: var(--surface-raised); color: var(--ink);
+  border: 1px solid var(--line-strong); border-radius: var(--radius-sm);
+  font-family: var(--font-text); font-size: 16px; /* 16 px evita el zoom automático de iOS */
+}
+.sb-input::placeholder { color: var(--ink-muted); }
+.sb-input:hover { border-color: var(--ink-muted); }
+.sb-input[aria-invalid="true"] { border-color: var(--danger); }
+.sb-field-error, .sb-field-hint { margin-top: 6px; font-family: var(--font-text); font-size: 12px; line-height: 16px; font-weight: 500; }
+.sb-field-error { display: flex; align-items: flex-start; gap: 6px; color: var(--danger); }
+.sb-field-hint { color: var(--ink-muted); }
+
+.sb-alert {
+  display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px;
+  border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--surface-raised);
+  font-family: var(--font-text); font-size: 14px; line-height: 20px;
+}
+.sb-alert--danger { border-color: var(--danger); color: var(--danger); }
+
+/* Drawer móvil: <dialog> modal que entra desde la izquierda */
+.sb-navdrawer[open] { animation: sb-drawer-in 0.2s ease-out; }
+@keyframes sb-drawer-in { from { transform: translateX(-100%); } to { transform: translateX(0); } }
+.sb-navdrawer::backdrop { animation: sb-fade-in 0.2s ease-out; }
+@keyframes sb-fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+/* Drawer de filtros (móvil): entra desde la derecha */
+.sb-filterdrawer[open] { animation: sb-drawer-in-right 0.2s ease-out; }
+@keyframes sb-drawer-in-right { from { transform: translateX(100%); } to { transform: translateX(0); } }
+.sb-filterdrawer::backdrop { animation: sb-fade-in 0.2s ease-out; }
+
+/* Galería: el carrusel de fotos oculta su barra de scroll (se navega con miniaturas, flechas o deslizando) */
+.sb-gallery-track { scrollbar-width: none; }
+.sb-gallery-track::-webkit-scrollbar { display: none; }

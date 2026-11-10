@@ -1,0 +1,34 @@
+@import "tailwindcss";
+@import "./tokens.css";
+/* Clases sb-* en la capa `components`: las utilidades de Tailwind (hidden, px-4, w-full…) siempre pueden ajustarlas. */
+@import "../components/bundle.css" layer(components);
+
+/* Base: el tema Catálogo (claro) es el predeterminado; Editorial se aplica por sección con .theme-editorial */
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--font-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Manual de marca: nunca itálicas. */
+em, i, cite, address {
+  font-style: normal;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Con un drawer o menú modal abierto, la página de fondo no se desplaza. */
+html:has(dialog[open]) {
+  overflow: hidden;
+}

@@ -1,0 +1,23 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: starboy_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: starboy_db
+      POSTGRES_USER: starboy
+      POSTGRES_PASSWORD: starboy_pass
+      TZ: America/Bogota
+    ports:
+      # 5434 en el host porque 5432 suele estar ocupado por otros Postgres locales
+      - "5434:5432"
+    volumes:
+      - starboy_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U starboy -d starboy_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  starboy_pgdata:
