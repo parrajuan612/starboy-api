@@ -1,0 +1,21 @@
+# Entrada pública del sitio. SITE_ADDRESS decide el modo:
+#   tienda.midominio.com        → HTTPS automático (Let's Encrypt)
+#   1-2-3-4.sslip.io            → HTTPS automático sin comprar dominio (sirve para pruebas)
+#   :80                         → HTTP simple, sin certificado (solo pruebas internas)
+{$SITE_ADDRESS:localhost} {
+	encode zstd gzip
+
+	# La API limita las fotos a 5 MB; aquí se corta antes cualquier cuerpo desproporcionado.
+	request_body {
+		max_size 12MB
+	}
+
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+
+	# Todo pasa por la web: ella reenvía /api/v1/* y /uploads/* a la API (que no se expone al exterior).
+	reverse_proxy web:3000
+}

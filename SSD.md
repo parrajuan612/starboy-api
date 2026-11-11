@@ -67,8 +67,8 @@ Este documento es la **única fuente de verdad** del proyecto. Cualquier cambio 
 - [ ] Flujos E2E en local: compra (Mercado Pago sandbox, transferencia, contra entrega) y encargo completo (solicitud → cotización → anticipo → estados → saldo → entrega)
 - [ ] Panel admin: crear producto con 4 fotos y tallas, cambiar precio, editar parámetros de impuestos/flete/comisión
 - [ ] Revisión visual contra §12 (temas, tipografías, contraste, foco de teclado)
-- [ ] Stack completo con `docker compose` local (fase L2)
-- [ ] Backup y restauración probados
+- [x] Stack completo con `docker compose` local (fase L2) — `docker-compose.prod.yml`, probado 2026-11-11
+- [x] Backup y restauración probados — `infra/scripts/backup.sh` y `restore.sh`, probados 2026-11-11 (falta programarlos en el servidor)
 
 ---
 
@@ -2101,6 +2101,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 | ADR-023 | Tipografías **Oswald** (display) + **Barlow** (texto); Barlow reemplaza a Inter | ✅ Aceptada (nueva en v1.1) |
 | ADR-024 | Un producto se publica solo con **≥ 4 fotos** (regla de marca, validada en servicio) | ✅ Aceptada (nueva en v1.1) |
 | ADR-025 | Las pasarelas de pago son intercambiables: interfaz `payments.Provider` + suite de contrato (`providertest`) + registro único (`registry.go`) + `PAYMENT_PROVIDERS`. El sandbox está prohibido en producción | ✅ Aceptada (v1.3) |
+| ADR-027 | Despliegue con **Docker Compose + Caddy** en una VM (Postgres, API, Web y proxy HTTPS en contenedores; solo Caddy publica puertos). `staging` = validación con pasarela de pruebas; `production` = sitio real | ✅ Aceptada (v1.3) |
 | ADR-026 | El pago del saldo de un encargo no cambia su estado; habilita el despacho (ver §16.5) | ✅ Aceptada (v1.3) |
 
 ---
@@ -2156,6 +2157,8 @@ Requisitos: Go 1.25, Node 20+, Docker (o PostgreSQL 16 nativo).
 5. Admin del seed: `admin@starboy.local` / `una-clave-larga-segura` (solo desarrollo; cambiarlo en cualquier entorno real).
 
 Los puertos 3000/3100 pueden estar ocupados por otros proyectos locales: usar otro (`npm run dev -- -p 3465`). Verificación antes de cerrar cualquier tarea: `gofmt -l .`, `go build ./...`, `go vet ./...`, `go test ./...` en `apps/api`; `npx tsc --noEmit`, `npm run lint`, `npm run build` en `apps/web`.
+
+**Despliegue en un servidor (Oracle u otro):** `docker-compose.prod.yml` levanta Postgres + API + Web + Caddy (HTTPS automático; sirve también con `IP.sslip.io` sin comprar dominio). Guía paso a paso en `docs/DEPLOY.md`; el `.env` se genera con `bash infra/scripts/init-env.sh`; respaldos con `infra/scripts/backup.sh` (base + fotos) y `restore.sh`. Se usa `APP_ENV=staging` para un servidor de validación (pasarela de pruebas activa) y `production` para el sitio real. Los valores `NEXT_PUBLIC_*` se fijan al **compilar** la web: cambiarlos exige reconstruir la imagen.
 
 ### 16.2 Qué está construido
 
@@ -2222,6 +2225,7 @@ Pruebas de navegador: saldo, re-cotización y retorno de pasarela (`balance`), 7
 - Inventario en el panel es de solo lectura; el stock se ajusta desde la pantalla del producto (solo ADMIN), y cada ajuste queda en la bitácora inmutable.
 - Un producto cuyas tallas ya tuvieron stock o pedidos no se puede eliminar (la bitácora de inventario no se borra): se archiva. Solo los borradores sin historial se eliminan, y con ello sus archivos de foto.
 - Las fotos nuevas se guardan como `/uploads/<uuid>.<ext>` (ruta relativa, sin atarse a un dominio); las anteriores pueden ser URLs https (Cloudinary).
+- **La pantalla de inicio es un texto fijo en el código** (`app/(store)/page.tsx`: un solo bloque «New season»): no es editable desde el panel y no muestra «Nuevos lanzamientos» ni «Destacados» (los productos sí tienen las marcas `is_new_release` y `is_featured`, pero nada las lista aún). `/nuevos` cae en «Próximamente».
 - No existen aún `/content/home`, cupones, promociones, banners, `shipping-zones`, el dashboard de KPIs (el panel solo tiene accesos rápidos) ni `/orders/lookup`; el envío se muestra «Gratis» o «se confirma» sin cálculo por zona.
 - El tablero de encargos carga las 200 solicitudes más recientes.
 
@@ -2236,7 +2240,7 @@ Pruebas de navegador: saldo, re-cotización y retorno de pasarela (`balance`), 7
 | H3 Backend | 🟡 ~88 % | auth, usuario y direcciones, catálogo, carrito, órdenes con reserva e idempotencia, pagos (anticipo, saldo, pasarelas intercambiables), inventario inmutable, encargos y cotizador, ajustes, subida de fotos | adaptador de la pasarela real, Cloudinary, cupones, zonas de envío, correos, tests de integración (cobertura ≥ 70 %), OpenAPI |
 | H4 Tienda | 🟡 ~85 % | catálogo, producto, carrito, checkout (precarga dirección), pasarela sandbox, cuenta, Encargos USA del cliente | checkout de invitado, páginas «Próximamente», recuperar contraseña, revisión visual contra §12 |
 | H5 Panel | 🟡 ~85 % | órdenes, inventario, encargos (con saldo y re-cotización), pagos, productos (tallas, stock, fotos), marcas y categorías, parámetros, tarifas | aprobar transferencias, banners, cupones, zonas de envío, dashboard de KPIs |
-| H6 Validación local tipo producción | ⬜ | — | `docker-compose.prod.yml`, backups (BD y `UPLOAD_DIR`), checklist de §0, E2E en el repo |
+| H6 Validación local tipo producción | 🟡 ~60 % | `docker-compose.prod.yml`, Dockerfiles, Caddy, `.env` generado, respaldos y restauración probados, E2E en el repo, `docs/DEPLOY.md` | programar los respaldos en el servidor, correr los E2E contra el stack, `go test` ≥ 70 % |
 | H7 Despliegue Oracle + Cloudflare | ⬜ | — | VM, dominio, correo, monitoreo (§15.2) |
 | H8 Post-lanzamiento | ⬜ | — | WhatsApp automático, API de envíos, fidelidad |
 
@@ -2244,13 +2248,15 @@ Pruebas de navegador: saldo, re-cotización y retorno de pasarela (`balance`), 7
 
 1. ~~**Control de versiones y CI**~~ ✅ Hecho (2026-11-11): repo en GitHub (`parrajuan612/starboy-api`) y `.github/workflows/ci.yml` (gofmt, vet, build y test de la API; tsc, lint y build de la web).
 2. ✅ Checkout con dirección predeterminada. ✅ Encargos USA del cliente. ✅ Gestión de catálogo y ajustes en el panel (2026-11-11).
-3. **Cargar datos reales del negocio:** tarifas por categoría y parámetros en `/admin/ajustes`, marcas, categorías y primeros productos con fotos (§15.2).
-4. ✅ **Saldo y re-cotización de encargos** (2026-11-11). Falta en encargos: captura de pantalla del producto y avisos por correo/WhatsApp.
-5. **Fotos en Cloudinary:** driver de `platform/storage` (hoy disco local en `UPLOAD_DIR`), descripción (alt) de las fotos y arrastrar y soltar para ordenarlas.
-6. **Pagos reales — pasarela lista para conectar** (la infraestructura ya está, ver §16.5): escribir el adaptador de la pasarela elegida (README de `platform/payments`), pasar la suite de contrato, habilitar `PAYMENT_PROVIDERS`, `PUBLIC_API_URL` y `NEXT_PUBLIC_PAYMENT_HOSTS`. Después: transferencia con comprobante (aprobación manual en `/admin/pagos`, hoy de solo lectura), contra entrega y reembolsos (ADR-007).
-7. **Resto de la tienda:** checkout de invitado, envío por zonas (ADR-017), cupones, banners, páginas «Próximamente», recuperar contraseña, correos transaccionales, dashboard de KPIs.
-8. **Pruebas:** ✅ guiones Playwright en `apps/web/e2e/`. Falta correrlos en CI (stack con Docker Compose + Chrome) y las pruebas de integración de Go (órdenes, reserva de stock, direcciones, ajustes, subida de fotos) contra un Postgres de prueba. Meta H3: ≥ 70 % de cobertura en servicios.
-9. **H6–H7:** `docker-compose.prod.yml`, backups probados, checklist de §0 y despliegue en Oracle + Cloudflare.
+3. **Contenido de inicio editable** (lo que el cliente ve primero): hero/banners con foto, texto y botón; secciones «Nuevos lanzamientos» y «Destacados» alimentadas por las marcas de cada producto; página `/nuevos`; categorías con imagen; franja superior de anuncios. Backend (tabla de contenido + `GET /content/home` público + CRUD ADMIN) y pantalla `/admin/inicio` con subida de fotos.
+4. **Cuentas:** cambiar contraseña, crear cuentas de equipo (STAFF/ADMIN) desde el panel y recuperar contraseña por correo (esto último necesita el servicio de correo).
+5. **Cargar datos reales del negocio:** tarifas por categoría y parámetros en `/admin/ajustes`, marcas, categorías y primeros productos con fotos (§15.2).
+6. ✅ **Saldo y re-cotización de encargos** (2026-11-11). Falta en encargos: captura de pantalla del producto y avisos por correo/WhatsApp.
+7. **Fotos en Cloudinary:** driver de `platform/storage` (hoy disco local en `UPLOAD_DIR`), descripción (alt) de las fotos y arrastrar y soltar para ordenarlas.
+8. **Pagos reales — pasarela lista para conectar** (la infraestructura ya está, ver §16.5): escribir el adaptador de la pasarela elegida (README de `platform/payments`), pasar la suite de contrato, habilitar `PAYMENT_PROVIDERS`, `PUBLIC_API_URL` y `NEXT_PUBLIC_PAYMENT_HOSTS`. Después: transferencia con comprobante (aprobación manual en `/admin/pagos`, hoy de solo lectura), contra entrega y reembolsos (ADR-007).
+9. **Resto de la tienda:** checkout de invitado, envío por zonas (ADR-017), cupones, banners, páginas «Próximamente», recuperar contraseña, correos transaccionales, dashboard de KPIs.
+10. **Pruebas:** ✅ guiones Playwright en `apps/web/e2e/`. Falta correrlos en CI (stack con Docker Compose + Chrome) y las pruebas de integración de Go (órdenes, reserva de stock, direcciones, ajustes, subida de fotos) contra un Postgres de prueba. Meta H3: ≥ 70 % de cobertura en servicios.
+11. **H6–H7:** terminar el checklist de §0 y desplegar en Oracle (`docs/DEPLOY.md`) con Cloudflare por delante cuando haya dominio.
 
 ### 16.7 Cómo continuar en otro equipo (con IA o sin ella)
 

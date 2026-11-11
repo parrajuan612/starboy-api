@@ -37,4 +37,13 @@ cd apps/api && gofmt -l . && go build ./... && go vet ./... && go test ./...
 cd apps/web && npx tsc --noEmit && npm run lint && npm run build
 ```
 
+## Desplegar en un servidor
+
+`docker-compose.prod.yml` levanta todo (Postgres + API + Web + Caddy con HTTPS). Guía completa para Oracle Cloud u otro: **[docs/DEPLOY.md](docs/DEPLOY.md)**.
+
+```bash
+bash infra/scripts/init-env.sh tienda.midominio.com correo-del-admin@gmail.com staging   # genera .env con secretos
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
 Para continuar el desarrollo en otra máquina, empieza por **SSD.md §16**.

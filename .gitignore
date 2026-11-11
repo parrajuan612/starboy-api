@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+!.env.prod.example
 
 # Node / Next
 node_modules/
@@ -30,3 +31,6 @@ scratchpad/
 
 # Fotos subidas desde el panel (datos, no código)
 /apps/api/uploads/
+
+# Respaldos del servidor (base de datos y fotos)
+/backups/
