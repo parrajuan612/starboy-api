@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Guiones de prueba de navegador (Node, no código de la app).
+    "e2e/**",
   ]),
 ]);
 

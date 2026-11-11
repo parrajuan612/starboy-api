@@ -2185,7 +2185,7 @@ Grupos de permisos: `admin` = solo ADMIN (catálogo, cotizaciones, tarifas, pago
 | Panel (solo ADMIN) | `/admin/productos` (lista, búsqueda, filtro por estado), `/admin/productos/nuevo`, `/admin/productos/[id]` (publicar/borrador/archivar con requisitos, datos, tallas en lote y stock, fotos con subida múltiple y orden, eliminar), `/admin/catalogo` (marcas y categorías), `/admin/ajustes` (parámetros de negocio y tarifas por categoría de encargo). STAFF no ve estos menús y la API les responde 403 |
 | Panel | `/admin` (inicio), `/admin/ordenes`, `/admin/inventario` (stock + bitácora, solo lectura), `/admin/encargos` (tablero de 7 columnas o lista; cotización solo ADMIN) |
 
-Pruebas de navegador: 79/79 de gestión de catálogo y ajustes, 51/51 de Encargos USA del cliente, 87/88 comprobaciones del Paso 6 (cuenta y panel) y 78/79 del checkout; las dos fallas fueron de los guiones de prueba, no de la app (una carrera de foco ya corregida; una comprobación de «id inválido → 404» en la confirmación de pedido, aún por revisar). Los guiones (Playwright sobre Chrome headless) **no están en el repo**: ver §16.6.
+Pruebas de navegador: 79/79 de gestión de catálogo y ajustes, 51/51 de Encargos USA del cliente, 87/88 comprobaciones del Paso 6 (cuenta y panel) y 78/79 del checkout; las dos fallas fueron de los guiones de prueba, no de la app (una carrera de foco ya corregida; una comprobación de «id inválido → 404» en la confirmación de pedido, aún por revisar). Los guiones (Playwright sobre Chrome headless) están en `apps/web/e2e/` con su README (`npm run e2e`); no corren en CI porque necesitan el stack local.
 
 ### 16.3 Convenciones que no se deben romper
 
@@ -2235,14 +2235,14 @@ Pruebas de navegador: 79/79 de gestión de catálogo y ajustes, 51/51 de Encargo
 
 **Hoja de ruta (orden recomendado)**
 
-1. **Control de versiones y CI:** repo en GitHub (`parrajuan612/starboy-api`); añadir workflow en `.github/workflows` con las verificaciones de §16.1.
+1. ~~**Control de versiones y CI**~~ ✅ Hecho (2026-11-11): repo en GitHub (`parrajuan612/starboy-api`) y `.github/workflows/ci.yml` (gofmt, vet, build y test de la API; tsc, lint y build de la web).
 2. ✅ Checkout con dirección predeterminada. ✅ Encargos USA del cliente. ✅ Gestión de catálogo y ajustes en el panel (2026-11-11).
 3. **Cargar datos reales del negocio:** tarifas por categoría y parámetros en `/admin/ajustes`, marcas, categorías y primeros productos con fotos (§15.2).
 4. **Encargos, lo que falta:** pago del **saldo** (`BALANCE_DUE`; la API solo cobra el anticipo desde `ACCEPTED`), pedir re-cotización cuando vence, captura de pantalla del producto y avisos por correo/WhatsApp.
 5. **Fotos en Cloudinary:** driver de `platform/storage` (hoy disco local en `UPLOAD_DIR`), descripción (alt) de las fotos y arrastrar y soltar para ordenarlas.
 6. **Pagos reales:** Mercado Pago, transferencia con comprobante (con pantalla de aprobación en el panel) y contra entrega (ADR-007).
 7. **Resto de la tienda:** checkout de invitado, envío por zonas (ADR-017), cupones, banners, páginas «Próximamente», recuperar contraseña, correos transaccionales, dashboard de KPIs.
-8. **Pruebas en el repo:** llevar los guiones Playwright a `apps/web/e2e/` y automatizarlos; pruebas de integración de Go (órdenes, reserva de stock, direcciones, ajustes, subida de fotos) contra un Postgres de prueba. Meta H3: ≥ 70 % de cobertura en servicios.
+8. **Pruebas:** ✅ guiones Playwright en `apps/web/e2e/`. Falta correrlos en CI (stack con Docker Compose + Chrome) y las pruebas de integración de Go (órdenes, reserva de stock, direcciones, ajustes, subida de fotos) contra un Postgres de prueba. Meta H3: ≥ 70 % de cobertura en servicios.
 9. **H6–H7:** `docker-compose.prod.yml`, backups probados, checklist de §0 y despliegue en Oracle + Cloudflare.
 
 ### 16.7 Cómo continuar en otro equipo (con IA o sin ella)
