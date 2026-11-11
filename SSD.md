@@ -2178,7 +2178,7 @@ Grupos de permisos: `admin` = solo ADMIN (catálogo, cotizaciones, tarifas, pago
 |------|-------|
 | Tienda | `/`, `/hombre`, `/mujer`, `/accesorios`, `/marcas`, `/estilos`, `/productos`, `/producto/[slug]`, `/buscar`, `/carrito` |
 | Auth | `/login`, `/registro` |
-| Compra | `/checkout`, `/pago/…` (pasarela sandbox y confirmación) |
+| Compra | `/checkout` (precarga contacto y la dirección predeterminada; selector de direcciones guardadas), `/pago/…` (pasarela sandbox y confirmación) |
 | Cuenta | `/cuenta` (perfil), `/cuenta/direcciones`, `/cuenta/pedidos`, `/cuenta/pedidos/[id]` (seguimiento con línea de tiempo) |
 | Panel | `/admin` (inicio), `/admin/ordenes`, `/admin/inventario` (stock + bitácora, solo lectura), `/admin/encargos` (tablero de 7 columnas o lista; cotización solo ADMIN) |
 
@@ -2210,13 +2210,12 @@ Pruebas de navegador: 87/88 comprobaciones del Paso 6 (cuenta y panel) y 78/79 d
 - Inventario en el panel es de solo lectura; el ajuste de stock está en las rutas ADMIN del catálogo.
 - No existen aún `/content/home`, cupones, promociones, banners, `shipping-zones`, dashboard ni `/orders/lookup`; el envío se muestra «Gratis» o «se confirma» sin cálculo por zona.
 - El tablero de encargos carga las 200 solicitudes más recientes.
-- La dirección predeterminada de la cuenta todavía **no** precarga el checkout (este sí precarga nombre, apellidos, cédula y celular).
 
 ### 16.6 Hoja de ruta de lo pendiente (en orden recomendado)
 
 1. **Control de versiones y CI:** repo en GitHub (`parrajuan612/starboy-api`); añadir workflow en `.github/workflows` con las verificaciones de §16.1.
 2. **Pruebas E2E en el repo:** llevar los guiones Playwright a `apps/web/e2e/` y automatizarlos; añadir pruebas de integración de Go (órdenes, reserva de stock, direcciones) contra un Postgres de prueba. Meta H3: ≥ 70 % de cobertura en servicios.
-3. **Checkout:** precargar la dirección predeterminada y permitir elegir entre las guardadas.
+3. ~~**Checkout:** precargar la dirección predeterminada y permitir elegir entre las guardadas.~~ ✅ Hecho (2026-11-11).
 4. **Encargos USA del cliente (frontend):** calculadora (`/imports/quote`), formulario de solicitud, listado y seguimiento, aceptar cotización con cuenta regresiva de 48 h (§10.5).
 5. **Gestión de catálogo en el panel (solo ADMIN):** crear y editar productos, variantes, ajuste de stock, 4 fotos mínimo en Cloudinary (firma de subida `/admin/uploads/sign`). Criterio H5: un no-técnico crea un producto en < 3 min.
 6. **Pagos reales:** Mercado Pago, transferencia con comprobante y contra entrega (ADR-007).

@@ -9,6 +9,7 @@ import { EmptyCart } from "@/components/cart/EmptyCart";
 import { useCartView } from "@/components/cart/useCartView";
 import { Breadcrumbs } from "@/components/product/Breadcrumbs";
 import { Alert, Button, Field, SelectField, TextAreaField } from "@/components/ui";
+import { listAddresses } from "@/lib/account";
 import { isApiError } from "@/lib/api-client";
 import { attemptKey, clearAttempt, clearDraft, loadDraft, saveDraft } from "@/lib/checkout-draft";
 import { DEPARTMENTS } from "@/lib/colombia";
@@ -17,7 +18,7 @@ import { confirmationPath, createOrder, createPayment, paymentPath } from "@/lib
 import { checkoutSchema, EMPTY_CHECKOUT, type CheckoutForm } from "@/lib/validators/checkout";
 import { useAuthStore } from "@/store/auth";
 import { useCartStore } from "@/store/cart";
-import type { User } from "@/types";
+import type { Address, User } from "@/types";
 
 import { CheckoutSummary } from "./CheckoutSummary";
 
@@ -37,6 +38,13 @@ function initialValues(user: User): Values {
     ...loadDraft(),
   };
 }
+
+/** Copia una dirección guardada a los campos de envío; no toca los datos de contacto. */
+function applyAddress(v: Values, a: Address): Values {
+  return { ...v, department: a.department, city: a.city, line1: a.line1, line2: a.line2 ?? "", notes: a.notes ?? "" };
+}
+
+const addressLabel = (a: Address) => `${a.label ? `${a.label} · ` : ""}${a.line1}, ${a.city}${a.is_default ? " (predeterminada)" : ""}`;
 
 interface StockIssue {
   variantId: string;
@@ -70,6 +78,34 @@ export function CheckoutPage() {
   useEffect(() => {
     saveDraft(values);
   }, [values]);
+
+  // Direcciones guardadas en la cuenta. La predeterminada llena el formulario solo si la persona
+  // aún no escribió una dirección (el borrador tiene prioridad). Si falla, se sigue a mano.
+  const [saved, setSaved] = useState<Address[]>([]);
+  const [chosen, setChosen] = useState("");
+  useEffect(() => {
+    let alive = true;
+    listAddresses()
+      .then((list) => {
+        if (!alive || list.length === 0) return;
+        setSaved(list);
+        const def = list.find((a) => a.is_default);
+        if (def && !loadDraft().line1) {
+          setChosen(def.id);
+          setValues((v) => applyAddress(v, def));
+        }
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  function pickAddress(e: React.ChangeEvent<HTMLSelectElement>) {
+    const a = saved.find((x) => x.id === e.target.value);
+    setChosen(e.target.value);
+    if (a) setValues((v) => applyAddress(v, a));
+  }
 
   const set = (k: keyof Values) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setValues((v) => ({ ...v, [k]: e.target.value }));
@@ -258,6 +294,16 @@ export function CheckoutPage() {
                 <h2 id="co-ship" className="display-sm">
                   Dirección de envío
                 </h2>
+                {saved.length > 0 && (
+                  <SelectField label="Direcciones guardadas" name="saved_address" value={chosen} onChange={pickAddress}>
+                    <option value="">Escribir otra dirección</option>
+                    {saved.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {addressLabel(a)}
+                      </option>
+                    ))}
+                  </SelectField>
+                )}
                 <div className="grid gap-5 sm:grid-cols-2">
                   <SelectField label="Departamento" name="department" required autoComplete="address-level1" value={values.department} onChange={set("department")} error={f.department}>
                     <option value="">Elige tu departamento</option>
