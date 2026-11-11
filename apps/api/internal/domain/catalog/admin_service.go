@@ -14,6 +14,7 @@ import (
 	"github.com/juancamiloparra/starboy-api/internal/apperr"
 	"github.com/juancamiloparra/starboy-api/internal/http/response"
 	"github.com/juancamiloparra/starboy-api/internal/models"
+	"github.com/juancamiloparra/starboy-api/internal/platform/storage"
 )
 
 var (
@@ -65,10 +66,20 @@ func resolveSlug(given, base string, maxLen int) (string, *apperr.Error) {
 }
 
 // AdminService contiene las reglas del CRUD de catálogo.
-type AdminService struct{ repo AdminRepository }
+type AdminService struct {
+	repo AdminRepository
+	// removeFile borra el archivo de una foto eliminada (mejor esfuerzo: si falla, solo queda un archivo huérfano).
+	removeFile func(publicID string)
+}
 
 // NewAdminService crea el servicio.
 func NewAdminService(repo AdminRepository) *AdminService { return &AdminService{repo: repo} }
+
+// WithFileRemover conecta el borrado de archivos al eliminar una foto.
+func (s *AdminService) WithFileRemover(fn func(publicID string)) *AdminService {
+	s.removeFile = fn
+	return s
+}
 
 // ======================= Categorías =======================
 
@@ -511,6 +522,12 @@ func (s *AdminService) mapProductWriteErr(err error) error {
 
 // DeleteProduct solo borra borradores; lo publicado se archiva para no romper pedidos ni enlaces.
 func (s *AdminService) DeleteProduct(ctx context.Context, id uuid.UUID) error {
+	var files []string // fotos del producto: sus archivos se borran solo si el producto de verdad se eliminó
+	if cur, gerr := s.GetProduct(ctx, id); gerr == nil {
+		for _, im := range cur.Images {
+			files = append(files, im.PublicID)
+		}
+	}
 	err := s.repo.DeleteProduct(ctx, id, func(p *models.Product) error {
 		if p.Status != models.ProductDraft {
 			return conflict("PRODUCT_NOT_DRAFT", "Solo puedes eliminar borradores. Para retirar este producto de la tienda, archívalo.")
@@ -522,6 +539,11 @@ func (s *AdminService) DeleteProduct(ctx context.Context, id uuid.UUID) error {
 			return conflict("PRODUCT_IN_USE", "El producto está en uso. Archívalo en su lugar.")
 		}
 		return s.mapProductWriteErr(err)
+	}
+	if s.removeFile != nil {
+		for _, f := range files {
+			s.removeFile(f)
+		}
 	}
 	return nil
 }
@@ -540,10 +562,16 @@ func checkHTTPS(field, raw string) *apperr.Error {
 }
 
 func (s *AdminService) AddImage(ctx context.Context, productID uuid.UUID, in AddImageRequest) (*AdminProductResponse, error) {
-	if aerr := checkHTTPS("url", in.URL); aerr != nil {
+	publicID := strings.TrimSpace(in.PublicID)
+	if wantID, local := storage.IsLocalURL(in.URL); local {
+		// Foto subida desde el panel: la URL y el public_id deben corresponder, para no registrar un archivo ajeno.
+		if publicID != wantID {
+			return nil, fieldErr("public_id", "La foto no coincide con el archivo subido.")
+		}
+	} else if aerr := checkHTTPS("url", in.URL); aerr != nil {
 		return nil, aerr
 	}
-	img := &models.ProductImage{PublicID: strings.TrimSpace(in.PublicID), URL: in.URL, Alt: strings.TrimSpace(in.Alt)}
+	img := &models.ProductImage{PublicID: publicID, URL: in.URL, Alt: strings.TrimSpace(in.Alt)}
 	if err := s.repo.AddImage(ctx, productID, img); err != nil {
 		return nil, productErr(err)
 	}
@@ -552,6 +580,14 @@ func (s *AdminService) AddImage(ctx context.Context, productID uuid.UUID, in Add
 
 // DeleteImage impide dejar un producto publicado por debajo del mínimo de fotos.
 func (s *AdminService) DeleteImage(ctx context.Context, productID, imageID uuid.UUID) (*AdminProductResponse, error) {
+	var removed string
+	if cur, gerr := s.GetProduct(ctx, productID); gerr == nil {
+		for _, im := range cur.Images {
+			if im.ID == imageID {
+				removed = im.PublicID
+			}
+		}
+	}
 	err := s.repo.DeleteImage(ctx, productID, imageID, func(p *models.Product, remaining int) error {
 		if p.Status == models.ProductActive {
 			if aerr := needsImages(remaining); aerr != nil {
@@ -565,6 +601,9 @@ func (s *AdminService) DeleteImage(ctx context.Context, productID, imageID uuid.
 			return nil, notFound("IMAGE_NOT_FOUND", "No encontramos esa foto en el producto.")
 		}
 		return nil, s.mapProductWriteErr(err)
+	}
+	if removed != "" && s.removeFile != nil {
+		s.removeFile(removed)
 	}
 	return s.GetProduct(ctx, productID)
 }

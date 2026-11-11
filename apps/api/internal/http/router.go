@@ -19,11 +19,13 @@ import (
 	"github.com/juancamiloparra/starboy-api/internal/domain/order"
 	"github.com/juancamiloparra/starboy-api/internal/domain/payment"
 	"github.com/juancamiloparra/starboy-api/internal/domain/settings"
+	"github.com/juancamiloparra/starboy-api/internal/domain/upload"
 	"github.com/juancamiloparra/starboy-api/internal/domain/user"
 	"github.com/juancamiloparra/starboy-api/internal/http/middleware"
 	"github.com/juancamiloparra/starboy-api/internal/http/response"
 	"github.com/juancamiloparra/starboy-api/internal/models"
 	"github.com/juancamiloparra/starboy-api/internal/platform/payments"
+	"github.com/juancamiloparra/starboy-api/internal/platform/storage"
 	"github.com/juancamiloparra/starboy-api/internal/platform/token"
 )
 
@@ -72,7 +74,28 @@ func NewRouter(cfg *config.Config, db *gorm.DB) (*gin.Engine, *Services) {
 
 	// Panel: solo ADMIN. (STAFF tendrá sus propias rutas de inventario/órdenes en H3, sin precios.)
 	admin := api.Group("/admin", middleware.Auth(tokens), middleware.RequireRole(models.RoleAdmin))
-	catalog.NewAdminHandler(catalog.NewAdminService(catalog.NewAdminRepository(db))).RegisterRoutes(admin)
+	photos, err := storage.NewLocal(cfg.UploadDir)
+	if err != nil {
+		slog.Error("no se pudo preparar la carpeta de fotos; subir fotos no funcionará", "dir", cfg.UploadDir, "error", err)
+	} else {
+		// Fotos subidas desde el panel: lectura pública, sin listado de carpeta y sin que el navegador adivine el tipo.
+		uploads := r.Group("/uploads", func(c *gin.Context) {
+			c.Header("X-Content-Type-Options", "nosniff")
+			c.Header("Cache-Control", "public, max-age=31536000, immutable")
+		})
+		uploads.StaticFS("/", gin.Dir(photos.Dir(), false))
+		upload.NewHandler(photos).RegisterRoutes(admin, middleware.RateLimit(30, time.Minute))
+	}
+	catalogAdmin := catalog.NewAdminService(catalog.NewAdminRepository(db))
+	if photos != nil {
+		catalogAdmin.WithFileRemover(func(id string) {
+			if err := photos.Delete(id); err != nil {
+				slog.Warn("no se pudo borrar el archivo de una foto", "public_id", id, "error", err)
+			}
+		})
+	}
+	catalog.NewAdminHandler(catalogAdmin).RegisterRoutes(admin)
+	settings.NewAdminHandler(settings.NewAdminService(db)).RegisterRoutes(admin)
 
 	// Encargos USA: cotizador y solicitudes (cliente) + bandeja y estados (ADMIN y STAFF, SSD §3).
 	importSvc := importreq.NewService(importreq.NewRepository(db), settings.NewService(settings.NewReader(db)))

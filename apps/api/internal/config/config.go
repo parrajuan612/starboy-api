@@ -24,7 +24,9 @@ type Config struct {
 	DB             DB
 	JWT            JWT
 	Payments       Payments
-	Seed           Seed
+	// UploadDir es la carpeta donde se guardan las fotos subidas desde el panel (ADR-006: luego Cloudinary).
+	UploadDir string
+	Seed      Seed
 }
 
 // Payments agrupa lo necesario para las pasarelas de pago.
@@ -122,6 +124,7 @@ func Load() (*Config, error) {
 			AccessTTL:     accessTTL,
 			RefreshTTL:    refreshTTL,
 		},
+		UploadDir: env("UPLOAD_DIR", "./uploads"),
 		Payments: Payments{
 			WebhookSecret: os.Getenv("PAYMENT_WEBHOOK_SECRET"),
 			WebBaseURL:    strings.TrimRight(env("WEB_BASE_URL", "http://localhost:3000"), "/"),

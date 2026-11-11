@@ -27,3 +27,6 @@ next-env.d.ts
 
 # Pruebas E2E y capturas locales
 scratchpad/
+
+# Fotos subidas desde el panel (datos, no código)
+/apps/api/uploads/

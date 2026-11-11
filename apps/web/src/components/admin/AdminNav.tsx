@@ -1,22 +1,28 @@
 "use client";
 
-import { Boxes, ClipboardList, Globe2, LayoutDashboard } from "lucide-react";
+import { Boxes, ClipboardList, Globe2, LayoutDashboard, Settings, Shirt, Tags } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { Logo } from "@/components/ui";
+import { useAuthStore } from "@/store/auth";
 
 const ITEMS = [
   { href: "/admin", label: "Resumen", icon: LayoutDashboard, exact: true },
   { href: "/admin/ordenes", label: "Órdenes", icon: ClipboardList },
   { href: "/admin/inventario", label: "Inventario", icon: Boxes },
   { href: "/admin/encargos", label: "Encargos USA", icon: Globe2 },
+  // Gestión del catálogo y del negocio: solo ADMIN (la API lo exige igualmente).
+  { href: "/admin/productos", label: "Productos", icon: Shirt, adminOnly: true },
+  { href: "/admin/catalogo", label: "Catálogo", icon: Tags, adminOnly: true },
+  { href: "/admin/ajustes", label: "Ajustes", icon: Settings, adminOnly: true },
 ] as const;
 
 /** Navegación del panel: barra lateral en escritorio; en móvil, franja superior que se desplaza sola (sin ensanchar la página). */
 export function AdminNav() {
   const pathname = usePathname();
-  const links = ITEMS.map((it) => {
+  const role = useAuthStore((s) => s.user?.role);
+  const links = ITEMS.filter((it) => !("adminOnly" in it) || role === "ADMIN").map((it) => {
     const active = "exact" in it ? pathname === it.href : pathname.startsWith(it.href);
     const Icon = it.icon;
     return (

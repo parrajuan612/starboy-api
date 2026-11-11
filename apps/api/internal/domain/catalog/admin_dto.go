@@ -193,7 +193,7 @@ type UpdateVariantRequest struct {
 // AddImageRequest registra una foto ya subida (la firma de subida a Cloudinary llega en otra fase).
 type AddImageRequest struct {
 	PublicID string `json:"public_id" binding:"required,max=255"`
-	URL      string `json:"url" binding:"required,url,max=2000"`
+	URL      string `json:"url" binding:"required,max=2000"` // https://… o /uploads/… (foto subida desde el panel)
 	Alt      string `json:"alt" binding:"omitempty,max=200"`
 }
 

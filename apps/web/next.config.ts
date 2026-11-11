@@ -20,7 +20,11 @@ const nextConfig: NextConfig = {
   // El navegador llama a /api/v1/* en el mismo origen y Next lo reenvía a la API.
   // Así la cookie de refresh (httpOnly) funciona sin CORS ni SameSite=None.
   async rewrites() {
-    return [{ source: "/api/v1/:path*", destination: `${API_URL}/api/v1/:path*` }];
+    return [
+      { source: "/api/v1/:path*", destination: `${API_URL}/api/v1/:path*` },
+      // Fotos subidas desde el panel (las sirve la API; se guardan como /uploads/… para no atarlas a un dominio).
+      { source: "/uploads/:path*", destination: `${API_URL}/uploads/:path*` },
+    ];
   },
 };
 

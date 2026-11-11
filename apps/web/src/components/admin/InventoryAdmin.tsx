@@ -1,6 +1,7 @@
 "use client";
 
 import { Search } from "lucide-react";
+import Link from "next/link";
 import { useId, useState } from "react";
 
 import { Pager } from "@/components/admin/Pager";
@@ -8,6 +9,7 @@ import { Alert } from "@/components/ui";
 import { useDebounced } from "@/hooks/useDebounced";
 import { usePagedList } from "@/hooks/usePagedList";
 import { formatDate } from "@/lib/format";
+import { useAuthStore } from "@/store/auth";
 import type { InventoryMovement, MovementType, StockRow } from "@/types";
 
 type Tab = "stock" | "log";
@@ -77,6 +79,7 @@ function StockTable({ onHistory }: { onHistory: (r: StockRow) => void }) {
   const [page, setPage] = useState(1);
   const dq = useDebounced(q.trim());
   const { rows, meta, loading, error } = usePagedList<StockRow>("/admin/inventory/stock", { q: dq, filter }, page, 50);
+  const isAdmin = useAuthStore((s) => s.user?.role === "ADMIN"); // solo ADMIN edita productos y stock
 
   return (
     <div>
@@ -132,6 +135,11 @@ function StockTable({ onHistory }: { onHistory: (r: StockRow) => void }) {
                         <button type="button" onClick={() => onHistory(r)} className="label hover:text-accent min-h-11" aria-label={`Ver movimientos de ${r.product_name} talla ${r.size}`}>
                           Movimientos
                         </button>
+                        {isAdmin && (
+                          <Link href={`/admin/productos/${r.product_id}`} className="label hover:text-accent ml-2 inline-flex min-h-11 items-center" aria-label={`Editar stock de ${r.product_name}`}>
+                            Editar
+                          </Link>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -151,7 +159,10 @@ function StockTable({ onHistory }: { onHistory: (r: StockRow) => void }) {
                     <Availability n={r.available} />
                   </div>
                   <p className="body-sm text-ink-muted mt-2">En bodega {r.stock_on_hand} · Reservado {r.stock_reserved}</p>
-                  <button type="button" onClick={() => onHistory(r)} className="sb-btn sb-btn--secondary mt-3 w-full">Ver movimientos</button>
+                  <div className="mt-3 flex flex-col gap-2">
+                    <button type="button" onClick={() => onHistory(r)} className="sb-btn sb-btn--secondary w-full">Ver movimientos</button>
+                    {isAdmin && <Link href={`/admin/productos/${r.product_id}`} className="sb-btn sb-btn--secondary w-full">Editar producto y stock</Link>}
+                  </div>
                 </li>
               ))}
             </ul>

@@ -103,6 +103,8 @@ export const http = {
   get: async <T>(url: string, config?: AxiosRequestConfig) => (await api.get<Envelope<T>>(url, config)).data.data,
   post: async <T>(url: string, body?: unknown, config?: AxiosRequestConfig) =>
     (await api.post<Envelope<T>>(url, body, config)).data.data,
+  put: async <T>(url: string, body?: unknown, config?: AxiosRequestConfig) =>
+    (await api.put<Envelope<T>>(url, body, config)).data.data,
   patch: async <T>(url: string, body?: unknown, config?: AxiosRequestConfig) =>
     (await api.patch<Envelope<T>>(url, body, config)).data.data,
   delete: async <T>(url: string, config?: AxiosRequestConfig) => (await api.delete<Envelope<T>>(url, config)).data.data,

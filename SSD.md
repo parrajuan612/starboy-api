@@ -2168,7 +2168,8 @@ Los puertos 3000/3100 pueden estar ocupados por otros proyectos locales: usar ot
 | payment | `POST /payments/checkout`, `GET /payments/:id`, webhook `POST /payments/webhook/:provider`, `POST /payments/:id/simulate` (solo sandbox), admin `GET /admin/payments` | Proveedor **sandbox** (webhook protegido con `PAYMENT_WEBHOOK_SECRET`); pago tardío sobre orden vencida queda «en revisión» |
 | inventory | `GET /admin/inventory/movements`, `GET /admin/inventory/stock?q=&filter=low\|out` | `inventory_movements` es inmutable (trigger). `LowStockThreshold = 3` |
 | importreq | público: `GET /imports/rates`, `POST /imports/quote`; cliente: `POST /imports`, `GET /imports/my-requests`, `GET /imports/:id` (404 si es ajeno), aceptar cotización; backoffice: `GET /admin/imports(/:id)`, `PATCH /admin/imports/:id/status`; admin: cotizaciones y `import-rates` | `allowed_next` en las vistas de admin (excluye ACCEPTED, PAID y QUOTED: los asigna el flujo) |
-| settings | parámetros de negocio (§9.4) | |
+| settings | `GET/PUT /admin/settings` (solo ADMIN): los 9 parámetros de §9.4 con etiqueta, unidad y rango; el `PUT` es todo-o-nada y aplica solo a cotizaciones nuevas | `settings.Specs` es la fuente única de rangos (la usan la lectura y la edición) |
+| upload | `POST /admin/uploads` (solo ADMIN, multipart `file`) | JPG/PNG/WebP de hasta 5 MB, validados por contenido; se guardan en `UPLOAD_DIR` con nombre aleatorio y se sirven en `/uploads/…` (sin listado, `nosniff`). Hoy disco local; Cloudinary (ADR-006) entra como otro driver de `platform/storage` |
 
 Grupos de permisos: `admin` = solo ADMIN (catálogo, cotizaciones, tarifas, pagos); `backoffice` = ADMIN y STAFF (órdenes, encargos, inventario). Errores uniformes `{error:{code,message,details}}`; dinero en `int64` COP. Tests: `config`, `payments/sandbox`, `middleware/ratelimit`, `importreq/calculator`.
 
@@ -2181,9 +2182,10 @@ Grupos de permisos: `admin` = solo ADMIN (catálogo, cotizaciones, tarifas, pago
 | Compra | `/checkout` (precarga contacto y la dirección predeterminada; selector de direcciones guardadas), `/pago/…` (pasarela sandbox y confirmación) |
 | Cuenta | `/cuenta` (perfil), `/cuenta/direcciones`, `/cuenta/pedidos`, `/cuenta/pedidos/[id]` (seguimiento con línea de tiempo) |
 | Encargos USA | `/encargos-usa` (cómo funciona, calculadora pública, tiempos), `/encargos-usa/cotizar` (solicitud, exige sesión), `/encargos-usa/rastreo` (→ cuenta), `/cuenta/encargos` (lista), `/cuenta/encargos/[id]` (cotización con cuenta regresiva, aceptar y pagar anticipo, línea de tiempo, guías e historial). La pasarela sandbox cobra también el anticipo de un encargo |
+| Panel (solo ADMIN) | `/admin/productos` (lista, búsqueda, filtro por estado), `/admin/productos/nuevo`, `/admin/productos/[id]` (publicar/borrador/archivar con requisitos, datos, tallas en lote y stock, fotos con subida múltiple y orden, eliminar), `/admin/catalogo` (marcas y categorías), `/admin/ajustes` (parámetros de negocio y tarifas por categoría de encargo). STAFF no ve estos menús y la API les responde 403 |
 | Panel | `/admin` (inicio), `/admin/ordenes`, `/admin/inventario` (stock + bitácora, solo lectura), `/admin/encargos` (tablero de 7 columnas o lista; cotización solo ADMIN) |
 
-Pruebas de navegador: 51/51 de Encargos USA del cliente, 87/88 comprobaciones del Paso 6 (cuenta y panel) y 78/79 del checkout; las dos fallas fueron de los guiones de prueba, no de la app (una carrera de foco ya corregida; una comprobación de «id inválido → 404» en la confirmación de pedido, aún por revisar). Los guiones (Playwright sobre Chrome headless) **no están en el repo**: ver §16.6.
+Pruebas de navegador: 79/79 de gestión de catálogo y ajustes, 51/51 de Encargos USA del cliente, 87/88 comprobaciones del Paso 6 (cuenta y panel) y 78/79 del checkout; las dos fallas fueron de los guiones de prueba, no de la app (una carrera de foco ya corregida; una comprobación de «id inválido → 404» en la confirmación de pedido, aún por revisar). Los guiones (Playwright sobre Chrome headless) **no están en el repo**: ver §16.6.
 
 ### 16.3 Convenciones que no se deben romper
 
@@ -2210,7 +2212,9 @@ Pruebas de navegador: 51/51 de Encargos USA del cliente, 87/88 comprobaciones de
 - Encargos USA: el cliente no puede pagar el saldo ni pedir re-cotización desde la web (no hay endpoint); la solicitud exige categoría y precio en USD porque la cotización del equipo los necesita, y no hay captura de pantalla.
 - Las 7 categorías de `import_rates` del seed tienen tarifa $0 (pendiente de §15.2) y **no hay pantalla de admin para editarlas**: hasta cargarlas, la calculadora muestra «Envío internacional y logística» en $0. Solo ADMIN puede cambiarlas por API (`PATCH /admin/import-rates/:id`).
 - Checkout solo para usuarios con sesión; el checkout de invitado (ADR-009) está pendiente.
-- Inventario en el panel es de solo lectura; el ajuste de stock está en las rutas ADMIN del catálogo.
+- Inventario en el panel es de solo lectura; el stock se ajusta desde la pantalla del producto (solo ADMIN), y cada ajuste queda en la bitácora inmutable.
+- Un producto cuyas tallas ya tuvieron stock o pedidos no se puede eliminar (la bitácora de inventario no se borra): se archiva. Solo los borradores sin historial se eliminan, y con ello sus archivos de foto.
+- Las fotos nuevas se guardan como `/uploads/<uuid>.<ext>` (ruta relativa, sin atarse a un dominio); las anteriores pueden ser URLs https (Cloudinary).
 - No existen aún `/content/home`, cupones, promociones, banners, `shipping-zones`, dashboard ni `/orders/lookup`; el envío se muestra «Gratis» o «se confirma» sin cálculo por zona.
 - El tablero de encargos carga las 200 solicitudes más recientes.
 
@@ -2220,7 +2224,7 @@ Pruebas de navegador: 51/51 de Encargos USA del cliente, 87/88 comprobaciones de
 2. **Pruebas E2E en el repo:** llevar los guiones Playwright a `apps/web/e2e/` y automatizarlos; añadir pruebas de integración de Go (órdenes, reserva de stock, direcciones) contra un Postgres de prueba. Meta H3: ≥ 70 % de cobertura en servicios.
 3. ~~**Checkout:** precargar la dirección predeterminada y permitir elegir entre las guardadas.~~ ✅ Hecho (2026-11-11).
 4. ~~**Encargos USA del cliente (frontend):** calculadora, solicitud, listado y seguimiento, aceptar cotización con cuenta regresiva de 48 h.~~ ✅ Hecho (2026-11-11). Quedan: pago del **saldo** (`BALANCE_DUE`; la API solo cobra el anticipo desde `ACCEPTED`), pedir re-cotización cuando vence, captura de pantalla del producto (necesita Cloudinary) y avisos por correo/WhatsApp.
-5. **Gestión de catálogo en el panel (solo ADMIN):** crear y editar productos, variantes, ajuste de stock, 4 fotos mínimo en Cloudinary (firma de subida `/admin/uploads/sign`). Criterio H5: un no-técnico crea un producto en < 3 min.
+5. ~~**Gestión de catálogo en el panel (solo ADMIN).**~~ ✅ Hecho (2026-11-11): productos, tallas y stock, fotos, marcas, categorías, parámetros y tarifas. Quedan: driver de **Cloudinary** (hoy las fotos van a disco local: hacer backup de `UPLOAD_DIR` junto con la base), edición de la descripción de las fotos (alt), arrastrar y soltar para ordenar, y banners, cupones y zonas de envío.
 6. **Pagos reales:** Mercado Pago, transferencia con comprobante y contra entrega (ADR-007).
 7. **Resto de la tienda:** checkout de invitado, envío por zonas (ADR-017), cupones, páginas «Próximamente», recuperar contraseña, correos transaccionales, ajustes editables (§9.4) en el panel.
 8. **H6–H7:** `docker-compose.prod.yml`, backups probados, checklist de §0 y despliegue en Oracle + Cloudflare. Pendientes de negocio en §15.2.

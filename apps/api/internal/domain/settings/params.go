@@ -25,6 +25,30 @@ type Params struct {
 	FreeShippingThresholdCOP int64 `json:"free_shipping_threshold_cop"`
 }
 
+// Spec describe un parámetro editable: su rango válido y cómo mostrarlo en el panel.
+type Spec struct {
+	Key   string `json:"key"`
+	Label string `json:"label"`
+	Help  string `json:"help"`
+	Unit  string `json:"unit"` // "COP", "USD", "%", "h" o "" (número)
+	Min   int64  `json:"min"`
+	Max   int64  `json:"max"`
+}
+
+// Specs es la fuente única de los parámetros de negocio (SSD §9.4): la lectura (Params) y la edición
+// (AdminService) validan contra los mismos rangos, así un valor guardado siempre se puede leer.
+var Specs = []Spec{
+	{models.SettingExchangeRateCOP, "Dólar (TRM Starboy)", "Pesos por cada dólar. Se usa en la calculadora y en cada cotización.", "COP", 1, 100_000},
+	{models.SettingTaxExemptThresholdUSD, "Umbral sin impuestos", "Si el valor del producto supera este monto en USD, se cobran arancel e IVA. Confírmalo con el courier o un agente de aduanas (USD 200 o 50).", "USD", 0, 100_000},
+	{models.SettingTariffPercent, "Arancel", "Porcentaje que se suma cuando se supera el umbral.", "%", 0, 100},
+	{models.SettingVATPercent, "IVA", "Porcentaje que se suma cuando se supera el umbral.", "%", 0, 100},
+	{models.SettingServiceFeePercent, "Comisión de servicio", "Porcentaje sobre el valor del producto.", "%", 0, 100},
+	{models.SettingServiceFeeMinCOP, "Comisión mínima", "La comisión nunca baja de este valor.", "COP", 0, 1_000_000_000},
+	{models.SettingDefaultDepositPercent, "Anticipo por defecto", "Porcentaje que se cobra al aceptar la cotización. Puedes cambiarlo en cada cotización.", "%", 0, 100},
+	{models.SettingQuoteValidityHours, "Vigencia de la cotización", "Horas que la cotización sigue válida (48 = dos días).", "h", 1, 24 * 90},
+	{models.SettingFreeShippingThresholdCOP, "Envío gratis desde", "Subtotal desde el cual el envío nacional es gratis.", "COP", 0, 1_000_000_000},
+}
+
 // Reader lee las filas crudas de la tabla settings.
 type Reader interface {
 	All(ctx context.Context) (map[string]models.JSONB, error)
@@ -62,20 +86,21 @@ func (s *Service) Params(ctx context.Context) (Params, error) {
 		return Params{}, apperr.Internal(err)
 	}
 	var p Params
-	fields := []struct {
+	dst := map[string]*int64{
+		models.SettingExchangeRateCOP: &p.ExchangeRateCOP, models.SettingTaxExemptThresholdUSD: &p.TaxExemptThresholdUSD,
+		models.SettingTariffPercent: &p.TariffPercent, models.SettingVATPercent: &p.VATPercent,
+		models.SettingServiceFeePercent: &p.ServiceFeePercent, models.SettingServiceFeeMinCOP: &p.ServiceFeeMinCOP,
+		models.SettingDefaultDepositPercent: &p.DefaultDepositPercent, models.SettingQuoteValidityHours: &p.QuoteValidityHours,
+		models.SettingFreeShippingThresholdCOP: &p.FreeShippingThresholdCOP,
+	}
+	type field struct {
 		key      string
 		dst      *int64
 		min, max int64
-	}{
-		{models.SettingExchangeRateCOP, &p.ExchangeRateCOP, 1, 100_000},
-		{models.SettingTaxExemptThresholdUSD, &p.TaxExemptThresholdUSD, 0, 100_000},
-		{models.SettingTariffPercent, &p.TariffPercent, 0, 100},
-		{models.SettingVATPercent, &p.VATPercent, 0, 100},
-		{models.SettingServiceFeePercent, &p.ServiceFeePercent, 0, 100},
-		{models.SettingServiceFeeMinCOP, &p.ServiceFeeMinCOP, 0, 1_000_000_000},
-		{models.SettingDefaultDepositPercent, &p.DefaultDepositPercent, 0, 100},
-		{models.SettingQuoteValidityHours, &p.QuoteValidityHours, 1, 24 * 90},
-		{models.SettingFreeShippingThresholdCOP, &p.FreeShippingThresholdCOP, 0, 1_000_000_000},
+	}
+	fields := make([]field, 0, len(Specs))
+	for _, sp := range Specs {
+		fields = append(fields, field{sp.Key, dst[sp.Key], sp.Min, sp.Max})
 	}
 	for _, f := range fields {
 		v, ok := raw[f.key]
