@@ -9,10 +9,22 @@ import { Alert, Button } from "@/components/ui";
 import { formatClock, useCountdown } from "@/hooks/useCountdown";
 import { isApiError } from "@/lib/api-client";
 import { formatCOP } from "@/lib/format";
+import { createImportPayment, getMyImport, importPath } from "@/lib/imports";
 import { confirmationPath, createPayment, getOrder, getPayment, paymentPath, simulatePayment } from "@/lib/orders";
-import type { Order, Payment } from "@/types";
+import type { ImportRequest, Order, Payment } from "@/types";
 
-type Load = { kind: "loading" } | { kind: "error"; message: string } | { kind: "ready"; payment: Payment; order: Order };
+/** Lo que se está pagando: una orden de la tienda o el anticipo de un encargo USA. */
+type Subject =
+  | { kind: "order"; id: string; label: string; code: string; reservedUntil?: string; pendingOrder: boolean }
+  | { kind: "import"; id: string; label: string; code: string };
+
+type Load = { kind: "loading" } | { kind: "error"; message: string } | { kind: "ready"; payment: Payment; subject: Subject };
+
+const orderSubject = (o: Order): Subject => ({ kind: "order", id: o.id, label: "Orden", code: o.code, reservedUntil: o.reserved_until, pendingOrder: o.status === "PENDING_PAYMENT" });
+const importSubject = (r: ImportRequest): Subject => ({ kind: "import", id: r.id, label: "Encargo", code: r.code });
+
+/** A dónde vuelve la persona según lo que pagó. */
+const backPath = (s: Subject, qs = "") => (s.kind === "order" ? confirmationPath(s.id, qs) : importPath(s.id, qs));
 
 /**
  * Pasarela de pagos de PRUEBA: es la `checkout_url` que entrega el backend (/pago/sandbox/{ref}).
@@ -32,9 +44,12 @@ export function SandboxPayment({ providerRef, paymentId }: { providerRef: string
     getPayment(paymentId)
       .then(async (payment) => {
         // El id y la referencia deben corresponder: evita abrir un cobro ajeno cambiando solo la URL.
-        if (payment.provider_ref !== providerRef || !payment.order_id) throw new Error("mismatch");
-        const order = await getOrder(payment.order_id);
-        if (alive) setLoad({ kind: "ready", payment, order });
+        if (payment.provider_ref !== providerRef) throw new Error("mismatch");
+        let subject: Subject;
+        if (payment.order_id) subject = orderSubject(await getOrder(payment.order_id));
+        else if (payment.import_request_id) subject = importSubject(await getMyImport(payment.import_request_id));
+        else throw new Error("mismatch");
+        if (alive) setLoad({ kind: "ready", payment, subject });
       })
       .catch((e: unknown) => {
         if (!alive) return;
@@ -46,7 +61,7 @@ export function SandboxPayment({ providerRef, paymentId }: { providerRef: string
     };
   }, [paymentId, providerRef]);
 
-  const reservedUntil = load.kind === "ready" ? load.order.reserved_until : undefined;
+  const reservedUntil = load.kind === "ready" && load.subject.kind === "order" ? load.subject.reservedUntil : undefined;
   const left = useCountdown(reservedUntil);
 
   async function resolve(outcome: "approved" | "declined") {
@@ -56,7 +71,7 @@ export function SandboxPayment({ providerRef, paymentId }: { providerRef: string
     try {
       const p = await simulatePayment(load.payment.id, outcome);
       if (p.status === "APPROVED") {
-        router.replace(confirmationPath(load.order.id, "?pago=aprobado"));
+        router.replace(backPath(load.subject, "?pago=aprobado"));
         return;
       }
       if (p.status === "DECLINED") setDeclined(true);
@@ -78,9 +93,10 @@ export function SandboxPayment({ providerRef, paymentId }: { providerRef: string
     setBusy("retry");
     setNotice(null);
     try {
-      const path = paymentPath(await createPayment(load.order.id));
+      const s = load.subject;
+      const path = paymentPath(await (s.kind === "order" ? createPayment(s.id) : createImportPayment(s.id)));
       if (path) router.replace(path);
-      else router.replace(confirmationPath(load.order.id, "?pago=pendiente"));
+      else router.replace(backPath(s, "?pago=pendiente"));
     } catch (e) {
       setNotice(isApiError(e) ? e.message : "No pudimos abrir un nuevo intento de pago.");
       setBusy(null);
@@ -119,15 +135,15 @@ export function SandboxPayment({ providerRef, paymentId }: { providerRef: string
             <>
               <dl className="space-y-3">
                 <div className="flex items-baseline justify-between gap-4">
-                  <dt className="body text-ink-muted">Orden</dt>
-                  <dd className="body-strong">{load.order.code}</dd>
+                  <dt className="body text-ink-muted">{load.subject.label}</dt>
+                  <dd className="body-strong">{load.subject.code}</dd>
                 </div>
                 <div className="flex items-baseline justify-between gap-4">
                   <dt className="body text-ink-muted">Comercio</dt>
                   <dd className="body">Starboy</dd>
                 </div>
                 <div className="border-line flex items-baseline justify-between gap-4 border-t pt-3">
-                  <dt className="body-strong">Total a pagar</dt>
+                  <dt className="body-strong">{load.subject.kind === "import" ? "Anticipo a pagar" : "Total a pagar"}</dt>
                   <dd className="price-lg tabular-nums">{formatCOP(load.payment.amount_cop)}</dd>
                 </div>
               </dl>
@@ -138,26 +154,26 @@ export function SandboxPayment({ providerRef, paymentId }: { providerRef: string
                     <CheckCircle2 className="size-5" strokeWidth={1.5} aria-hidden />
                     Este pago ya fue aprobado.
                   </p>
-                  <Link href={confirmationPath(load.order.id)} className="sb-btn sb-btn--primary w-full">
-                    Ver mi orden
+                  <Link href={backPath(load.subject)} className="sb-btn sb-btn--primary w-full">
+                    {load.subject.kind === "order" ? "Ver mi orden" : "Ver mi encargo"}
                   </Link>
                 </>
               ) : declined || load.payment.status === "DECLINED" ? (
                 <>
                   <p className="text-danger body flex items-start gap-2" role="alert">
                     <XCircle className="mt-0.5 size-5 shrink-0" strokeWidth={1.5} aria-hidden />
-                    Tu pago fue rechazado. No se hizo ningún cobro y tus productos siguen reservados.
+                    Tu pago fue rechazado. No se hizo ningún cobro{load.subject.kind === "order" ? " y tus productos siguen reservados" : ""}.
                   </p>
                   <Button onClick={retry} loading={busy === "retry"} className="w-full">
                     Intentar de nuevo
                   </Button>
-                  <Link href={confirmationPath(load.order.id)} className="sb-btn sb-btn--secondary w-full">
-                    Volver a mi orden
+                  <Link href={backPath(load.subject)} className="sb-btn sb-btn--secondary w-full">
+                    {load.subject.kind === "order" ? "Volver a mi orden" : "Volver a mi encargo"}
                   </Link>
                 </>
               ) : (
                 <>
-                  {left !== null && load.order.status === "PENDING_PAYMENT" && (
+                  {left !== null && load.subject.kind === "order" && load.subject.pendingOrder && (
                     <p className={`body-sm flex items-center gap-1.5 ${left === 0 ? "text-danger" : left < 300 ? "text-danger" : "text-ink-muted"}`} aria-live="off">
                       <AlertCircle className="size-4 shrink-0" strokeWidth={1.5} aria-hidden />
                       {left === 0 ? "Tu reserva venció. Si pagas ahora, la API puede rechazar el pago." : `Tu reserva vence en ${formatClock(left)}.`}
@@ -174,7 +190,7 @@ export function SandboxPayment({ providerRef, paymentId }: { providerRef: string
                       Simular pago rechazado
                     </Button>
                   </div>
-                  <Link href={confirmationPath(load.order.id, "?pago=pendiente")} className="body-sm text-ink-muted hover:text-ink block text-center underline underline-offset-4">
+                  <Link href={backPath(load.subject, "?pago=pendiente")} className="body-sm text-ink-muted hover:text-ink block text-center underline underline-offset-4">
                     Pagar después
                   </Link>
                 </>

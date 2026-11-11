@@ -7,6 +7,7 @@ const TABS = [
   { href: "/cuenta", label: "Perfil", exact: true },
   { href: "/cuenta/direcciones", label: "Direcciones" },
   { href: "/cuenta/pedidos", label: "Mis pedidos" },
+  { href: "/cuenta/encargos", label: "Mis encargos" },
 ] as const;
 
 /** Pestañas del área de cuenta. En móvil se desplazan dentro de su propia franja, sin ensanchar la página. */

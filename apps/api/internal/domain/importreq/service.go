@@ -238,6 +238,23 @@ func (s *Service) Get(ctx context.Context, id uuid.UUID, admin bool) (*RequestRe
 	return &out, nil
 }
 
+// GetMine devuelve el detalle de un encargo del cliente. Si no existe o es de otra persona responde
+// lo mismo (404), para no revelar qué códigos existen.
+func (s *Service) GetMine(ctx context.Context, userID, id uuid.UUID) (*RequestResponse, error) {
+	r, err := s.repo.Get(ctx, id)
+	if err != nil {
+		if errors.Is(err, errNotFound) {
+			return nil, notFoundImport()
+		}
+		return nil, apperr.Internal(err)
+	}
+	if r.UserID == nil || *r.UserID != userID {
+		return nil, notFoundImport()
+	}
+	out := toResponse(r, false, true)
+	return &out, nil
+}
+
 // ChangeStatus valida la transición contra la máquina de estados (§10.3) y, en una sola
 // transacción, actualiza el encargo y escribe la entrada de import_status_history.
 func (s *Service) ChangeStatus(ctx context.Context, id, adminID uuid.UUID, in ChangeStatusRequest) (*RequestResponse, error) {

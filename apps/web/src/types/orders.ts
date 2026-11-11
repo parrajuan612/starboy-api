@@ -58,6 +58,7 @@ export type PaymentStatus = "PENDING" | "IN_REVIEW" | "APPROVED" | "DECLINED" | 
 export interface Payment {
   id: string;
   order_id?: string;
+  import_request_id?: string;
   provider: string;
   provider_ref?: string;
   kind: string;
