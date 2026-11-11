@@ -2140,7 +2140,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
 ## 16. Estado de implementación y traspaso
 
-> Sección viva. Al terminar cada tarea, actualiza §16.2 y §16.6. **Esta sección manda sobre §11 y §8** cuando difieran: §11 es el diseño original; aquí está lo realmente construido. Última actualización: 2026-11-10.
+> Sección viva. Al terminar cada tarea, actualiza §16.2 y §16.6. **Esta sección manda sobre §11 y §8** cuando difieran: §11 es el diseño original; aquí está lo realmente construido. Última actualización: 2026-11-11.
 
 ### 16.1 Cómo levantar el proyecto en una máquina nueva
 
@@ -2148,7 +2148,7 @@ Requisitos: Go 1.25, Node 20+, Docker (o PostgreSQL 16 nativo).
 
 1. `docker compose up -d postgres` (host `localhost:5434`, BD `starboy_db`, usuario `starboy`).
 2. `apps/api`: `cp .env.example .env`, cambiar `JWT_*_SECRET` y `PAYMENT_WEBHOOK_SECRET` (≥ 32 caracteres) y `HTTP_PORT=8082`.
-3. `go run ./cmd/migrate -seed` (esquema por AutoMigrate + admin + catálogo demo; idempotente) y `go run ./cmd/server`.
+3. `go run ./cmd/migrate -seed` (esquema por AutoMigrate + admin + catálogo demo; idempotente) y `go run ./cmd/server`. Las fotos que subas desde el panel se guardan en `UPLOAD_DIR` (por defecto `./uploads`, fuera de git): respáldala junto con la base.
 4. `apps/web`: `cp .env.example .env.local` (`API_URL=http://localhost:8082`), `npm ci`, `npm run dev`.
 5. Admin del seed: `admin@starboy.local` / `una-clave-larga-segura` (solo desarrollo; cambiarlo en cualquier entorno real).
 
@@ -2210,28 +2210,45 @@ Pruebas de navegador: 79/79 de gestión de catálogo y ajustes, 51/51 de Encargo
 
 - Pasarela: se construyó primero el proveedor **sandbox**; **Mercado Pago** sigue pendiente (ADR-007).
 - Encargos USA: el cliente no puede pagar el saldo ni pedir re-cotización desde la web (no hay endpoint); la solicitud exige categoría y precio en USD porque la cotización del equipo los necesita, y no hay captura de pantalla.
-- Las 7 categorías de `import_rates` del seed tienen tarifa $0 (pendiente de §15.2) y **no hay pantalla de admin para editarlas**: hasta cargarlas, la calculadora muestra «Envío internacional y logística» en $0. Solo ADMIN puede cambiarlas por API (`PATCH /admin/import-rates/:id`).
+- Las 7 categorías de `import_rates` del seed tienen tarifa $0 (pendiente de §15.2). Se cargan en `/admin/ajustes` → «Tarifas por categoría»; mientras estén en $0 la calculadora y las cotizaciones no cobran logística.
 - Checkout solo para usuarios con sesión; el checkout de invitado (ADR-009) está pendiente.
 - Inventario en el panel es de solo lectura; el stock se ajusta desde la pantalla del producto (solo ADMIN), y cada ajuste queda en la bitácora inmutable.
 - Un producto cuyas tallas ya tuvieron stock o pedidos no se puede eliminar (la bitácora de inventario no se borra): se archiva. Solo los borradores sin historial se eliminan, y con ello sus archivos de foto.
 - Las fotos nuevas se guardan como `/uploads/<uuid>.<ext>` (ruta relativa, sin atarse a un dominio); las anteriores pueden ser URLs https (Cloudinary).
-- No existen aún `/content/home`, cupones, promociones, banners, `shipping-zones`, dashboard ni `/orders/lookup`; el envío se muestra «Gratis» o «se confirma» sin cálculo por zona.
+- No existen aún `/content/home`, cupones, promociones, banners, `shipping-zones`, el dashboard de KPIs (el panel solo tiene accesos rápidos) ni `/orders/lookup`; el envío se muestra «Gratis» o «se confirma» sin cálculo por zona.
 - El tablero de encargos carga las 200 solicitudes más recientes.
 
-### 16.6 Hoja de ruta de lo pendiente (en orden recomendado)
+### 16.6 Avance por hito y hoja de ruta de lo pendiente
+
+**Avance (2026-11-11)**
+
+| Hito | Estado | Hecho | Falta |
+|------|--------|-------|-------|
+| H1 Especificación | ✅ | SSD v1.2 | — |
+| H2 Modelos y BD | ✅ | GORM, AutoMigrate, seed idempotente, `/health` | — |
+| H3 Backend | 🟡 ~85 % | auth, usuario y direcciones, catálogo, carrito, órdenes con reserva e idempotencia, pagos sandbox, inventario inmutable, encargos y cotizador, ajustes, subida de fotos | Cloudinary, Mercado Pago, cupones, zonas de envío, correos, tests de integración (cobertura ≥ 70 %), OpenAPI |
+| H4 Tienda | 🟡 ~85 % | catálogo, producto, carrito, checkout (precarga dirección), pasarela sandbox, cuenta, Encargos USA del cliente | checkout de invitado, páginas «Próximamente», recuperar contraseña, revisión visual contra §12 |
+| H5 Panel | 🟡 ~80 % | órdenes, inventario, encargos, productos (tallas, stock, fotos), marcas y categorías, parámetros, tarifas | aprobar transferencias, banners, cupones, zonas de envío, dashboard de KPIs |
+| H6 Validación local tipo producción | ⬜ | — | `docker-compose.prod.yml`, backups (BD y `UPLOAD_DIR`), checklist de §0, E2E en el repo |
+| H7 Despliegue Oracle + Cloudflare | ⬜ | — | VM, dominio, correo, monitoreo (§15.2) |
+| H8 Post-lanzamiento | ⬜ | — | WhatsApp automático, API de envíos, fidelidad |
+
+**Hoja de ruta (orden recomendado)**
 
 1. **Control de versiones y CI:** repo en GitHub (`parrajuan612/starboy-api`); añadir workflow en `.github/workflows` con las verificaciones de §16.1.
-2. **Pruebas E2E en el repo:** llevar los guiones Playwright a `apps/web/e2e/` y automatizarlos; añadir pruebas de integración de Go (órdenes, reserva de stock, direcciones) contra un Postgres de prueba. Meta H3: ≥ 70 % de cobertura en servicios.
-3. ~~**Checkout:** precargar la dirección predeterminada y permitir elegir entre las guardadas.~~ ✅ Hecho (2026-11-11).
-4. ~~**Encargos USA del cliente (frontend):** calculadora, solicitud, listado y seguimiento, aceptar cotización con cuenta regresiva de 48 h.~~ ✅ Hecho (2026-11-11). Quedan: pago del **saldo** (`BALANCE_DUE`; la API solo cobra el anticipo desde `ACCEPTED`), pedir re-cotización cuando vence, captura de pantalla del producto (necesita Cloudinary) y avisos por correo/WhatsApp.
-5. ~~**Gestión de catálogo en el panel (solo ADMIN).**~~ ✅ Hecho (2026-11-11): productos, tallas y stock, fotos, marcas, categorías, parámetros y tarifas. Quedan: driver de **Cloudinary** (hoy las fotos van a disco local: hacer backup de `UPLOAD_DIR` junto con la base), edición de la descripción de las fotos (alt), arrastrar y soltar para ordenar, y banners, cupones y zonas de envío.
-6. **Pagos reales:** Mercado Pago, transferencia con comprobante y contra entrega (ADR-007).
-7. **Resto de la tienda:** checkout de invitado, envío por zonas (ADR-017), cupones, páginas «Próximamente», recuperar contraseña, correos transaccionales, ajustes editables (§9.4) en el panel.
-8. **H6–H7:** `docker-compose.prod.yml`, backups probados, checklist de §0 y despliegue en Oracle + Cloudflare. Pendientes de negocio en §15.2.
+2. ✅ Checkout con dirección predeterminada. ✅ Encargos USA del cliente. ✅ Gestión de catálogo y ajustes en el panel (2026-11-11).
+3. **Cargar datos reales del negocio:** tarifas por categoría y parámetros en `/admin/ajustes`, marcas, categorías y primeros productos con fotos (§15.2).
+4. **Encargos, lo que falta:** pago del **saldo** (`BALANCE_DUE`; la API solo cobra el anticipo desde `ACCEPTED`), pedir re-cotización cuando vence, captura de pantalla del producto y avisos por correo/WhatsApp.
+5. **Fotos en Cloudinary:** driver de `platform/storage` (hoy disco local en `UPLOAD_DIR`), descripción (alt) de las fotos y arrastrar y soltar para ordenarlas.
+6. **Pagos reales:** Mercado Pago, transferencia con comprobante (con pantalla de aprobación en el panel) y contra entrega (ADR-007).
+7. **Resto de la tienda:** checkout de invitado, envío por zonas (ADR-017), cupones, banners, páginas «Próximamente», recuperar contraseña, correos transaccionales, dashboard de KPIs.
+8. **Pruebas en el repo:** llevar los guiones Playwright a `apps/web/e2e/` y automatizarlos; pruebas de integración de Go (órdenes, reserva de stock, direcciones, ajustes, subida de fotos) contra un Postgres de prueba. Meta H3: ≥ 70 % de cobertura en servicios.
+9. **H6–H7:** `docker-compose.prod.yml`, backups probados, checklist de §0 y despliegue en Oracle + Cloudflare.
 
 ### 16.7 Cómo continuar en otro equipo (con IA o sin ella)
 
 1. Clonar, seguir §16.1 y correr las verificaciones.
 2. Leer este §16 completo y, del resto del SSD, solo lo que toque la tarea (§9 modelos, §10 flujos, §12 diseño).
-3. Tomar el primer ítem sin hacer de §16.6, implementarlo end-to-end (API + UI + prueba) y, al cerrarlo, **actualizar §16.2, §16.5 y §16.6** en el mismo commit.
+3. Tomar el primer ítem sin hacer de la hoja de ruta (§16.6), implementarlo end-to-end (API + UI + prueba) y, al cerrarlo, **actualizar §16.2, §16.5 y §16.6** en el mismo commit.
 4. Cambios de alcance, esquema o diseño: primero una nueva versión del SSD y un ADR en §14.
+5. Las pantallas de gestión (productos, catálogo, ajustes) ya existen: antes de proponer una pantalla nueva del panel, revisa si el dato se edita ahí.
