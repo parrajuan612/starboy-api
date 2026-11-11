@@ -12,6 +12,7 @@ con Docker y Chrome); se corren a mano antes de cerrar una tarea de interfaz.
 | `checkout-prefill` | precarga de la dirección predeterminada |
 | `account-admin` | cuenta (perfil, direcciones, pedidos) y panel de órdenes, inventario y encargos |
 | `imports` | Encargos USA del cliente: calculadora, solicitud, cotización, anticipo, seguimiento |
+| `balance` | pago del saldo de un encargo, bloqueo de despacho sin saldo, confirmación manual y contra entrega, re-cotización, página `/pago/retorno` y bandeja `/admin/pagos` (se espacia sola: la API limita los cobros a 10/min) |
 | `admin-catalog` | panel de catálogo: productos, tallas, fotos, marcas, categorías, parámetros y tarifas (**requiere `UPLOAD_DIR`**) |
 
 ## Cómo correrlas

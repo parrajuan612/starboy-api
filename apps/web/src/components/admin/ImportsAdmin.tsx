@@ -127,7 +127,7 @@ function Board({ q, version, onOpen }: { q: string; version: number; onOpen: (id
                       <button type="button" onClick={() => onOpen(c.id)} className="bg-surface border-line hover:border-line-strong w-full border p-3 text-left">
                         <span className="flex items-start justify-between gap-2">
                           <span className="body-strong">{c.code}</span>
-                          <span className={`sb-badge ${importBadge(c.status)}`}>{IMPORT_LABEL[c.status]}</span>
+                          <span className="flex flex-wrap justify-end gap-1"><span className={`sb-badge ${importBadge(c.status)}`}>{IMPORT_LABEL[c.status]}</span><Attention r={c} /></span>
                         </span>
                         <span className="body-sm mt-1 block truncate">{c.customer?.full_name ?? "Lote propio"}</span>
                         <span className="caption text-ink-muted mt-1 block">
@@ -192,7 +192,7 @@ function ListView({ q, version, onOpen }: { q: string; version: number; onOpen: 
                         <span className="block">{r.customer?.full_name ?? "Lote propio"}</span>
                         {r.customer && <span className="text-ink-muted block break-all">{r.customer.email}</span>}
                       </td>
-                      <td className="p-3"><span className={`sb-badge ${importBadge(r.status)}`}>{IMPORT_LABEL[r.status]}</span></td>
+                      <td className="p-3"><span className="flex flex-wrap gap-1"><span className={`sb-badge ${importBadge(r.status)}`}>{IMPORT_LABEL[r.status]}</span><Attention r={r} /></span></td>
                       <td className="p-3 text-right tabular-nums">{r.item_count}</td>
                       <td className="p-3 text-right tabular-nums whitespace-nowrap">{r.quote ? formatCOP(r.quote.total_cop) : "—"}</td>
                       <td className="p-3 whitespace-nowrap">{formatDate(r.created_at)}</td>
@@ -209,7 +209,7 @@ function ListView({ q, version, onOpen }: { q: string; version: number; onOpen: 
                 <li key={r.id} className="bg-surface-raised border-line border p-4">
                   <div className="flex items-start justify-between gap-3">
                     <p className="body-strong">{r.code}</p>
-                    <span className={`sb-badge ${importBadge(r.status)}`}>{IMPORT_LABEL[r.status]}</span>
+                    <span className="flex flex-wrap justify-end gap-1"><span className={`sb-badge ${importBadge(r.status)}`}>{IMPORT_LABEL[r.status]}</span><Attention r={r} /></span>
                   </div>
                   <p className="body-sm mt-1">{r.customer?.full_name ?? "Lote propio"}</p>
                   <p className="caption text-ink-muted">{r.item_count} productos{r.quote ? ` · ${formatCOP(r.quote.total_cop)}` : ""} · {formatDate(r.created_at)}</p>
@@ -222,5 +222,15 @@ function ListView({ q, version, onOpen }: { q: string; version: number; onOpen: 
         {meta && <Pager page={meta.page} totalPages={meta.total_pages} total={meta.total} onPage={setPage} disabled={loading} />}
       </div>
     </div>
+  );
+}
+
+/** Lo que requiere acción del equipo: una petición de nueva cotización o un saldo que bloquea el despacho. */
+function Attention({ r }: { r: ImportRequest }) {
+  return (
+    <>
+      {r.requote_requested_at && <span className="sb-badge sb-badge--danger">Pidió nueva cotización</span>}
+      {r.balance_blocks_dispatch && <span className="sb-badge sb-badge--danger">Saldo por pagar</span>}
+    </>
   );
 }

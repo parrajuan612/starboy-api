@@ -20,16 +20,46 @@ import (
 // Service contiene las reglas de cobro. providers solo incluye las pasarelas habilitadas.
 type Service struct {
 	repo      Repository
+	opts      Options
 	providers map[models.PaymentProvider]payments.Provider
 }
 
+// Options son las URL públicas que se le entregan a la pasarela al abrir un cobro.
+type Options struct {
+	WebBaseURL   string // https://tienda.com → ReturnURL = …/pago/retorno?pid=<id>
+	APIPublicURL string // https://api.tienda.com → NotifyURL = …/api/v1/payments/webhook/<pasarela>; vacío = sin URL de notificación
+}
+
 // NewService crea el servicio con las pasarelas disponibles.
-func NewService(repo Repository, providers ...payments.Provider) *Service {
+func NewService(repo Repository, opts Options, providers ...payments.Provider) *Service {
 	m := make(map[models.PaymentProvider]payments.Provider, len(providers))
 	for _, p := range providers {
 		m[p.Name()] = p
 	}
-	return &Service{repo: repo, providers: m}
+	opts.WebBaseURL, opts.APIPublicURL = strings.TrimRight(opts.WebBaseURL, "/"), strings.TrimRight(opts.APIPublicURL, "/")
+	return &Service{repo: repo, opts: opts, providers: m}
+}
+
+// checkoutInput arma lo que la pasarela necesita para abrir un cobro: monto del servidor, referencia legible
+// y las URL de retorno y de notificación (el cliente nunca las controla).
+func (s *Service) checkoutInput(id uuid.UUID, name models.PaymentProvider, amount int64, description, reference string) payments.CheckoutInput {
+	in := payments.CheckoutInput{PaymentID: id, AmountCOP: amount, Description: description, Reference: reference}
+	if s.opts.WebBaseURL != "" {
+		in.ReturnURL = s.opts.WebBaseURL + "/pago/retorno?pid=" + id.String()
+	}
+	if s.opts.APIPublicURL != "" {
+		in.NotifyURL = s.opts.APIPublicURL + "/api/v1/payments/webhook/" + strings.ToLower(string(name))
+	}
+	return in
+}
+
+// Enabled devuelve las pasarelas habilitadas (para que la web sepa qué ofrecer).
+func (s *Service) Enabled() []models.PaymentProvider {
+	out := make([]models.PaymentProvider, 0, len(s.providers))
+	for n := range s.providers {
+		out = append(out, n)
+	}
+	return out
 }
 
 // Provider devuelve la pasarela habilitada con ese nombre.
@@ -112,7 +142,7 @@ func (s *Service) checkoutOrder(ctx context.Context, userID, orderID uuid.UUID,
 			}
 		}
 		id := uuid.New()
-		res, err := prov.CreateCheckout(ctx, payments.CheckoutInput{PaymentID: id, AmountCOP: o.TotalCOP, Description: "Orden " + o.Code})
+		res, err := prov.CreateCheckout(ctx, s.checkoutInput(id, name, o.TotalCOP, "Orden "+o.Code, o.Code))
 		if err != nil {
 			return nil, false, apperr.Internal(fmt.Errorf("crear cobro en %s: %w", name, err))
 		}
@@ -124,7 +154,8 @@ func (s *Service) checkoutOrder(ctx context.Context, userID, orderID uuid.UUID,
 	})
 }
 
-// checkoutImport abre el cobro del anticipo de un encargo; el monto sale de la cotización aceptada.
+// checkoutImport abre el cobro de un encargo. Qué se cobra lo decide el estado, no el cliente:
+// ACCEPTED → el anticipo; BALANCE_DUE → el saldo. El monto sale de la cotización aceptada.
 func (s *Service) checkoutImport(ctx context.Context, userID, importID uuid.UUID,
 	name models.PaymentProvider, prov payments.Provider) (*models.Payment, error) {
 	return s.repo.Checkout(ctx, importID, func(cc *CheckoutContext) (*models.Payment, bool, error) {
@@ -132,33 +163,59 @@ func (s *Service) checkoutImport(ctx context.Context, userID, importID uuid.UUID
 		if imp.UserID == nil || *imp.UserID != userID {
 			return nil, false, notFoundImport() // no se revela si el encargo existe
 		}
-		for i := range cc.Existing {
-			if cc.Existing[i].Kind == models.PaymentDeposit && cc.Existing[i].Status == models.PaymentApproved {
+		approved := func(k models.PaymentKind) bool {
+			for i := range cc.Existing {
+				if cc.Existing[i].Kind == k && cc.Existing[i].Status == models.PaymentApproved {
+					return true
+				}
+			}
+			return false
+		}
+
+		var kind models.PaymentKind
+		var amount int64
+		var description string
+		switch imp.Status {
+		case models.ImportAccepted:
+			kind, description = models.PaymentDeposit, "Anticipo encargo "+imp.Code
+			if approved(kind) {
 				return nil, false, conflict("ALREADY_PAID", "Ya recibimos el anticipo de este encargo.")
 			}
-		}
-		switch imp.Status {
-		case models.ImportAccepted: // único estado desde el que se cobra el anticipo
+			if cc.Quote == nil || cc.Quote.DepositCOP <= 0 {
+				return nil, false, conflict("NO_ACCEPTED_QUOTE", "No encontramos una cotización aceptada con anticipo para este encargo.")
+			}
+			amount = cc.Quote.DepositCOP
+		case models.ImportBalanceDue:
+			kind, description = models.PaymentBalance, "Saldo encargo "+imp.Code
+			if approved(kind) {
+				return nil, false, conflict("ALREADY_PAID", "Ya recibimos el saldo de este encargo.")
+			}
+			if cc.Quote == nil || cc.Quote.BalanceCOP <= 0 {
+				return nil, false, conflict("NO_BALANCE_DUE", "Este encargo no tiene saldo por pagar.")
+			}
+			amount = cc.Quote.BalanceCOP
 		case models.ImportRequested, models.ImportQuoted, models.ImportExpired:
+			if approved(models.PaymentDeposit) {
+				return nil, false, conflict("ALREADY_PAID", "Ya recibimos el anticipo de este encargo.")
+			}
 			return nil, false, conflict("QUOTE_NOT_ACCEPTED", "Primero acepta la cotización de tu encargo para poder pagar el anticipo.")
 		default:
+			if approved(models.PaymentDeposit) && imp.Status == models.ImportPaid {
+				return nil, false, conflict("ALREADY_PAID", "Ya recibimos el anticipo de este encargo.")
+			}
 			return nil, false, conflict("IMPORT_NOT_PAYABLE",
-				fmt.Sprintf("Este encargo ya no admite pago de anticipo (estado: %s).", imp.Status))
+				fmt.Sprintf("Este encargo no tiene pagos pendientes (estado: %s).", imp.Status))
 		}
-		if cc.Quote == nil || cc.Quote.DepositCOP <= 0 {
-			return nil, false, conflict("NO_ACCEPTED_QUOTE", "No encontramos una cotización aceptada con anticipo para este encargo.")
-		}
-		// Un cobro pendiente del mismo tipo se reutiliza.
+
+		// Un cobro pendiente del mismo tipo y pasarela se reutiliza.
 		for i := range cc.Existing {
 			e := &cc.Existing[i]
-			if e.Kind == models.PaymentDeposit && e.Status == models.PaymentPending && e.Provider == name {
+			if e.Kind == kind && e.Status == models.PaymentPending && e.Provider == name {
 				return e, false, nil
 			}
 		}
 		id := uuid.New()
-		res, err := prov.CreateCheckout(ctx, payments.CheckoutInput{
-			PaymentID: id, AmountCOP: cc.Quote.DepositCOP, Description: "Anticipo encargo " + imp.Code,
-		})
+		res, err := prov.CreateCheckout(ctx, s.checkoutInput(id, name, amount, description, imp.Code))
 		if err != nil {
 			return nil, false, apperr.Internal(fmt.Errorf("crear cobro en %s: %w", name, err))
 		}
@@ -166,7 +223,7 @@ func (s *Service) checkoutImport(ctx context.Context, userID, importID uuid.UUID
 		return &models.Payment{
 			Base:            models.Base{ID: id},
 			ImportRequestID: &imp.ID, Provider: name, ProviderRef: &ref,
-			Kind: models.PaymentDeposit, AmountCOP: cc.Quote.DepositCOP, Status: models.PaymentPending,
+			Kind: kind, AmountCOP: amount, Status: models.PaymentPending,
 		}, true, nil
 	})
 }
@@ -200,15 +257,31 @@ func (s *Service) ProcessEvent(ctx context.Context, provider models.PaymentProvi
 		switch {
 		case ec.Import != nil:
 			imp := ec.Import
-			if pay.Kind != models.PaymentDeposit || ec.ApprovedExists || !models.CanTransition(imp.Status, models.ImportPaid) {
-				return review("encargo no puede pasar a PAID", "estado", imp.Status, "duplicado", ec.ApprovedExists)
+			switch pay.Kind {
+			case models.PaymentDeposit:
+				if ec.ApprovedExists || !models.CanTransition(imp.Status, models.ImportPaid) {
+					return review("encargo no puede pasar a PAID", "estado", imp.Status, "duplicado", ec.ApprovedExists)
+				}
+				pay.Status = models.PaymentApproved
+				imp.Status = models.ImportPaid
+				return &Effects{ImportHistory: &models.ImportStatusHistory{
+					Status: models.ImportPaid, NotifyCustomer: true,
+					Note: fmt.Sprintf("Recibimos tu anticipo de %s. ¡Ya empezamos con tu encargo!", formatCOP(pay.AmountCOP)),
+				}}, nil
+			case models.PaymentBalance:
+				// El saldo no cambia el estado: el despacho (y su guía) lo registra el equipo. El pago aprobado es
+				// lo que habilita ese paso (importreq exige un saldo pagado para pasar de BALANCE_DUE a En reparto).
+				if ec.ApprovedExists || imp.Status != models.ImportBalanceDue {
+					return review("el saldo llegó cuando el encargo no estaba en saldo pendiente", "estado", imp.Status, "duplicado", ec.ApprovedExists)
+				}
+				pay.Status = models.PaymentApproved
+				return &Effects{ImportHistory: &models.ImportStatusHistory{
+					Status: models.ImportBalanceDue, NotifyCustomer: true,
+					Note: fmt.Sprintf("Recibimos tu saldo de %s. Estamos preparando el despacho de tu encargo.", formatCOP(pay.AmountCOP)),
+				}}, nil
+			default:
+				return review("tipo de pago no válido para un encargo", "tipo", pay.Kind)
 			}
-			pay.Status = models.PaymentApproved
-			imp.Status = models.ImportPaid
-			return &Effects{ImportHistory: &models.ImportStatusHistory{
-				Status: models.ImportPaid, NotifyCustomer: true,
-				Note: fmt.Sprintf("Recibimos tu anticipo de %s. ¡Ya empezamos con tu encargo!", formatCOP(pay.AmountCOP)),
-			}}, nil
 
 		case ec.Order != nil:
 			o := ec.Order
@@ -327,7 +400,7 @@ func (s *Service) mapErr(err error) error {
 
 func (s *Service) toResponse(p *models.Payment) PaymentResponse {
 	r := PaymentResponse{
-		ID: p.ID, ImportRequestID: p.ImportRequestID, OrderID: p.OrderID, Provider: p.Provider,
+		ID: p.ID, ImportRequestID: p.ImportRequestID, OrderID: p.OrderID, TargetCode: p.TargetCode, Provider: p.Provider,
 		Kind: p.Kind, AmountCOP: p.AmountCOP, Status: p.Status, StatusLabel: statusLabels[p.Status],
 		CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt,
 	}

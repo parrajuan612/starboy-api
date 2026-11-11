@@ -59,6 +59,8 @@ export interface Payment {
   id: string;
   order_id?: string;
   import_request_id?: string;
+  /** Solo en el listado del panel: SB-000123 / IMP-000045. */
+  target_code?: string;
   provider: string;
   provider_ref?: string;
   kind: string;
@@ -67,4 +69,5 @@ export interface Payment {
   status_label: string;
   /** Solo mientras el pago está pendiente. */
   checkout_url?: string;
+  created_at?: string;
 }

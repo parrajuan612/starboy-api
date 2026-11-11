@@ -32,7 +32,12 @@ type Config struct {
 // Payments agrupa lo necesario para las pasarelas de pago.
 type Payments struct {
 	WebhookSecret string // firma HMAC de los webhooks (pasarela simulada)
-	WebBaseURL    string // base del frontend, para armar las URL de checkout
+	WebBaseURL    string // base del frontend, para armar las URL de checkout y de retorno
+	// APIPublicURL es la URL pública de la API (para que la pasarela sepa a dónde enviar el webhook). Opcional en local.
+	APIPublicURL string
+	// Providers son las pasarelas habilitadas (PAYMENT_PROVIDERS, separadas por coma). Por defecto SANDBOX fuera de
+	// producción y ninguna en producción: sin pasarela configurada, el cobro responde «no disponible».
+	Providers []string
 }
 
 // IsProduction indica si se corre en producción (cookies Secure, modo release).
@@ -128,6 +133,7 @@ func Load() (*Config, error) {
 		Payments: Payments{
 			WebhookSecret: os.Getenv("PAYMENT_WEBHOOK_SECRET"),
 			WebBaseURL:    strings.TrimRight(env("WEB_BASE_URL", "http://localhost:3000"), "/"),
+			APIPublicURL:  strings.TrimRight(os.Getenv("PUBLIC_API_URL"), "/"),
 		},
 		Seed: Seed{
 			AdminEmail:    os.Getenv("SEED_ADMIN_EMAIL"),
@@ -148,10 +154,26 @@ func Load() (*Config, error) {
 	if err := cfg.validateJWT(); err != nil {
 		return nil, err
 	}
+	cfg.Payments.Providers = splitCSV(env("PAYMENT_PROVIDERS", defaultProviders(cfg.IsProduction())))
+	if cfg.IsProduction() {
+		for _, p := range cfg.Payments.Providers {
+			if strings.EqualFold(p, "SANDBOX") {
+				return nil, errors.New("PAYMENT_PROVIDERS no puede incluir SANDBOX en producción")
+			}
+		}
+	}
 	if err := cfg.validateProxies(); err != nil {
 		return nil, err
 	}
 	return cfg, nil
+}
+
+// defaultProviders: la pasarela simulada solo existe fuera de producción.
+func defaultProviders(production bool) string {
+	if production {
+		return ""
+	}
+	return "SANDBOX"
 }
 
 const minSecretLen = 32

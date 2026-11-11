@@ -297,13 +297,13 @@ func (r *gormRepository) List(ctx context.Context, f ListFilter) ([]models.Payme
 	build := func() *gorm.DB {
 		q := r.db.WithContext(ctx).Model(&models.Payment{})
 		if f.Status != "" {
-			q = q.Where("status = ?", f.Status)
+			q = q.Where("payments.status = ?", f.Status)
 		}
 		if f.ImportRequestID != nil {
-			q = q.Where("import_request_id = ?", *f.ImportRequestID)
+			q = q.Where("payments.import_request_id = ?", *f.ImportRequestID)
 		}
 		if f.OrderID != nil {
-			q = q.Where("order_id = ?", *f.OrderID)
+			q = q.Where("payments.order_id = ?", *f.OrderID)
 		}
 		return q
 	}
@@ -315,6 +315,10 @@ func (r *gormRepository) List(ctx context.Context, f ListFilter) ([]models.Payme
 		return []models.Payment{}, total, nil
 	}
 	var items []models.Payment
-	err := build().Order("created_at DESC, id").Offset(f.Offset).Limit(f.Limit).Find(&items).Error
+	err := build().
+		Select("payments.*, COALESCE(orders.code, import_requests.code) AS target_code").
+		Joins("LEFT JOIN orders ON orders.id = payments.order_id").
+		Joins("LEFT JOIN import_requests ON import_requests.id = payments.import_request_id").
+		Order("payments.created_at DESC, payments.id").Offset(f.Offset).Limit(f.Limit).Find(&items).Error
 	return items, total, err
 }

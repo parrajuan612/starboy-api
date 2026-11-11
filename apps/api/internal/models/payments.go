@@ -52,4 +52,7 @@ type Payment struct {
 	ReviewedByID *uuid.UUID `gorm:"type:uuid" json:"reviewed_by_id,omitempty"`
 	ReviewedBy   *User      `gorm:"constraint:OnDelete:SET NULL" json:"-"`
 	RawPayload   JSONB      `json:"-"` // respuesta cruda de la pasarela (auditoría)
+
+	// TargetCode (solo lectura, lo llena el listado de administración): código del pedido o encargo que se paga.
+	TargetCode string `gorm:"->;-:migration" json:"-"`
 }

@@ -19,4 +19,7 @@ export const acceptQuote = (id: string, quoteId: string) =>
 /** Abre (o recupera) el cobro del anticipo. El monto sale de la cotización aceptada, en el servidor. */
 export const createImportPayment = (importId: string) => http.post<Payment>("/payments/checkout", { import_request_id: importId, provider: "SANDBOX" });
 
+/** El cliente pide una cotización nueva cuando la suya venció. */
+export const requestRequote = (id: string) => http.post<ImportRequest>(`/imports/${encodeURIComponent(id)}/requote`);
+
 export const importPath = (id: string, qs = "") => `/cuenta/encargos/${id}${qs}`;

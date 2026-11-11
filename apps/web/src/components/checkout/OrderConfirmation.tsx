@@ -10,7 +10,8 @@ import { Alert, Button } from "@/components/ui";
 import { formatClock, useCountdown } from "@/hooks/useCountdown";
 import { ApiError, isApiError } from "@/lib/api-client";
 import { formatCOP, formatDate } from "@/lib/format";
-import { createPayment, getOrder, paymentPath } from "@/lib/orders";
+import { goToPayment } from "@/lib/payment-redirect";
+import { createPayment, getOrder } from "@/lib/orders";
 import type { Order } from "@/types";
 
 const POLL_MS = 5000;
@@ -61,11 +62,7 @@ export function OrderConfirmation({ id, pago }: { id: string; pago?: string }) {
     setPaying(true);
     setPayError(null);
     try {
-      const path = paymentPath(await createPayment(order.id));
-      if (path) {
-        router.push(path);
-        return;
-      }
+      if (goToPayment(await createPayment(order.id), router)) return;
       setPayError("No pudimos abrir la pasarela de pago. Inténtalo de nuevo en unos segundos.");
     } catch (e) {
       setPayError(isApiError(e) ? e.message : "No pudimos abrir la pasarela de pago. Inténtalo de nuevo.");

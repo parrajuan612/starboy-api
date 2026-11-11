@@ -85,14 +85,17 @@ type ListQuery struct {
 }
 
 type ChangeStatusRequest struct {
-	Status         string     `json:"status" binding:"required,oneof=REQUESTED QUOTED ACCEPTED PAID PURCHASED IN_US_WAREHOUSE IN_TRANSIT IN_CUSTOMS IN_CO_WAREHOUSE BALANCE_DUE OUT_FOR_DELIVERY DELIVERED REJECTED EXPIRED CANCELLED"`
-	Note           string     `json:"note" binding:"omitempty,max=1000"` // visible para el cliente en su línea de tiempo
-	NotifyCustomer *bool      `json:"notify_customer"`                   // nil = true
-	CarrierUSA     *string    `json:"carrier_usa" binding:"omitempty,max=80"`
-	TrackingUSA    *string    `json:"tracking_usa" binding:"omitempty,max=120"`
-	TrackingCO     *string    `json:"tracking_co" binding:"omitempty,max=120"`
-	WeightLb       *float64   `json:"weight_lb" binding:"omitempty,gte=0,lte=1000"`
-	ETA            *time.Time `json:"eta"`
+	Status         string `json:"status" binding:"required,oneof=REQUESTED QUOTED ACCEPTED PAID PURCHASED IN_US_WAREHOUSE IN_TRANSIT IN_CUSTOMS IN_CO_WAREHOUSE BALANCE_DUE OUT_FOR_DELIVERY DELIVERED REJECTED EXPIRED CANCELLED"`
+	Note           string `json:"note" binding:"omitempty,max=1000"` // visible para el cliente en su línea de tiempo
+	NotifyCustomer *bool  `json:"notify_customer"`                   // nil = true
+	// ConfirmBalanceReceived: para pasar de «Saldo pendiente» a «En reparto» sin pago en la web (transferencia, efectivo o
+	// contra entrega acordada), el equipo confirma que recibió el saldo. Queda en el historial.
+	ConfirmBalanceReceived bool       `json:"confirm_balance_received"`
+	CarrierUSA             *string    `json:"carrier_usa" binding:"omitempty,max=80"`
+	TrackingUSA            *string    `json:"tracking_usa" binding:"omitempty,max=120"`
+	TrackingCO             *string    `json:"tracking_co" binding:"omitempty,max=120"`
+	WeightLb               *float64   `json:"weight_lb" binding:"omitempty,gte=0,lte=1000"`
+	ETA                    *time.Time `json:"eta"`
 }
 
 // CreateQuoteRequest: el admin emite la cotización formal; los montos salen de los ítems, las
@@ -170,12 +173,17 @@ type RequestResponse struct {
 	// AllowedNext (solo panel): estados a los que el equipo puede mover el encargo a mano. Excluye
 	// ACCEPTED y PAID (los asigna el flujo del cliente/pago) y QUOTED (se emite con una cotización).
 	AllowedNext []models.ImportStatus `json:"allowed_next,omitempty"`
-	Quote       *QuoteSummary         `json:"quote,omitempty"` // última cotización
-	ItemCount   int                   `json:"item_count"`
-	Items       []ItemResponse        `json:"items,omitempty"`
-	History     []HistoryResponse     `json:"history,omitempty"`
-	CreatedAt   time.Time             `json:"created_at"`
-	UpdatedAt   time.Time             `json:"updated_at"`
+	// BalancePaid: el saldo ya se pagó en la web. BalanceBlocksDispatch (solo panel): el despacho está bloqueado por saldo.
+	BalancePaid           bool `json:"balance_paid"`
+	BalanceBlocksDispatch bool `json:"balance_blocks_dispatch,omitempty"`
+	// RequoteRequestedAt: el cliente pidió una nueva cotización (la anterior venció).
+	RequoteRequestedAt *time.Time        `json:"requote_requested_at,omitempty"`
+	Quote              *QuoteSummary     `json:"quote,omitempty"` // última cotización
+	ItemCount          int               `json:"item_count"`
+	Items              []ItemResponse    `json:"items,omitempty"`
+	History            []HistoryResponse `json:"history,omitempty"`
+	CreatedAt          time.Time         `json:"created_at"`
+	UpdatedAt          time.Time         `json:"updated_at"`
 }
 
 // ---------- Tarifas por categoría (administración) ----------

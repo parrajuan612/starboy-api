@@ -14,3 +14,12 @@ func TestValidateProxies(t *testing.T) {
 		}
 	}
 }
+
+func TestDefaultProviders(t *testing.T) {
+	if got := defaultProviders(false); got != "SANDBOX" {
+		t.Errorf("en desarrollo la pasarela por defecto es SANDBOX, got %q", got)
+	}
+	if got := defaultProviders(true); got != "" {
+		t.Errorf("en producción no hay pasarela por defecto (nunca el simulador), got %q", got)
+	}
+}

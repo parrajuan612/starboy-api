@@ -38,6 +38,7 @@ type PaymentResponse struct {
 	ID              uuid.UUID              `json:"id"`
 	ImportRequestID *uuid.UUID             `json:"import_request_id,omitempty"`
 	OrderID         *uuid.UUID             `json:"order_id,omitempty"`
+	TargetCode      string                 `json:"target_code,omitempty"` // SB-000123 / IMP-000045 (solo en el listado de admin)
 	Provider        models.PaymentProvider `json:"provider"`
 	ProviderRef     string                 `json:"provider_ref,omitempty"`
 	Kind            models.PaymentKind     `json:"kind"`

@@ -34,6 +34,12 @@ type CheckoutInput struct {
 	PaymentID   uuid.UUID
 	AmountCOP   int64
 	Description string
+	// Reference es el código legible de lo que se paga (SB-000123 / IMP-000045), para mostrarlo en la pasarela.
+	Reference string
+	// ReturnURL es la página de Starboy a la que la pasarela devuelve al cliente (siempre lleva ?pid=<PaymentID>).
+	ReturnURL string
+	// NotifyURL es el endpoint público donde la pasarela debe enviar el webhook; vacío si PUBLIC_API_URL no está configurada.
+	NotifyURL string
 }
 
 // CheckoutResult identifica el cobro en la pasarela y a dónde enviar al cliente.

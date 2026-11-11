@@ -10,7 +10,8 @@ import { formatClock, useCountdown } from "@/hooks/useCountdown";
 import { isApiError } from "@/lib/api-client";
 import { formatCOP } from "@/lib/format";
 import { createImportPayment, getMyImport, importPath } from "@/lib/imports";
-import { confirmationPath, createPayment, getOrder, getPayment, paymentPath, simulatePayment } from "@/lib/orders";
+import { confirmationPath, createPayment, getOrder, getPayment, simulatePayment } from "@/lib/orders";
+import { paymentTarget } from "@/lib/payment-redirect";
 import type { ImportRequest, Order, Payment } from "@/types";
 
 /** Lo que se está pagando: una orden de la tienda o el anticipo de un encargo USA. */
@@ -94,8 +95,9 @@ export function SandboxPayment({ providerRef, paymentId }: { providerRef: string
     setNotice(null);
     try {
       const s = load.subject;
-      const path = paymentPath(await (s.kind === "order" ? createPayment(s.id) : createImportPayment(s.id)));
-      if (path) router.replace(path);
+      const t = paymentTarget(await (s.kind === "order" ? createPayment(s.id) : createImportPayment(s.id)));
+      if (t?.kind === "internal") router.replace(t.path);
+      else if (t) window.location.assign(t.url);
       else router.replace(backPath(s, "?pago=pendiente"));
     } catch (e) {
       setNotice(isApiError(e) ? e.message : "No pudimos abrir un nuevo intento de pago.");
@@ -143,7 +145,7 @@ export function SandboxPayment({ providerRef, paymentId }: { providerRef: string
                   <dd className="body">Starboy</dd>
                 </div>
                 <div className="border-line flex items-baseline justify-between gap-4 border-t pt-3">
-                  <dt className="body-strong">{load.subject.kind === "import" ? "Anticipo a pagar" : "Total a pagar"}</dt>
+                  <dt className="body-strong">{load.payment.kind === "BALANCE" ? "Saldo a pagar" : load.payment.kind === "DEPOSIT" ? "Anticipo a pagar" : "Total a pagar"}</dt>
                   <dd className="price-lg tabular-nums">{formatCOP(load.payment.amount_cop)}</dd>
                 </div>
               </dl>

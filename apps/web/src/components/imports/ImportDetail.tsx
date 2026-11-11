@@ -11,8 +11,8 @@ import { useCountdown } from "@/hooks/useCountdown";
 import { ApiError, isApiError } from "@/lib/api-client";
 import { formatCOP, formatDate, formatUSD } from "@/lib/format";
 import { importBadge } from "@/lib/import-status";
-import { acceptQuote, createImportPayment, getMyImport } from "@/lib/imports";
-import { paymentPath } from "@/lib/orders";
+import { acceptQuote, createImportPayment, getMyImport, requestRequote } from "@/lib/imports";
+import { goToPayment } from "@/lib/payment-redirect";
 import type { ImportQuote, ImportRequest } from "@/types";
 
 /** «1 d 4 h», «3 h 12 min», «8 min»: cuánto le queda a la cotización. */
@@ -48,10 +48,9 @@ export function ImportDetail({ id }: { id: string }) {
   const left = useCountdown(quote && imp?.status === "QUOTED" && quote.status === "SENT" ? quote.valid_until : undefined);
 
   async function pay(request: ImportRequest) {
+    // Qué se cobra (anticipo o saldo) lo decide el servidor según el estado del encargo.
     const p = await createImportPayment(request.id);
-    const path = paymentPath(p);
-    if (path) router.push(path);
-    else setActionError("No pudimos abrir el pago. Inténtalo de nuevo en un momento.");
+    if (!goToPayment(p, router)) setActionError("No pudimos abrir el pago. Inténtalo de nuevo en un momento.");
   }
 
   async function accept(q: ImportQuote) {
@@ -77,6 +76,19 @@ export function ImportDetail({ id }: { id: string }) {
       await pay(imp);
     } catch (e) {
       setActionError(isApiError(e) ? e.message : "No pudimos abrir el pago. Inténtalo de nuevo.");
+    }
+    setBusy(false);
+  }
+
+  async function requote() {
+    if (!imp || busy) return;
+    setBusy(true);
+    setActionError(null);
+    try {
+      setImp(await requestRequote(imp.id));
+    } catch (e) {
+      setActionError(isApiError(e) ? e.message : "No pudimos enviar tu petición. Inténtalo de nuevo.");
+      getMyImport(imp.id).then(setImp).catch(() => {});
     }
     setBusy(false);
   }
@@ -171,13 +183,52 @@ export function ImportDetail({ id }: { id: string }) {
               </Button>
             </div>
           )}
-          {expired && <p className="body text-danger mt-5">Esta cotización venció. Escríbenos y te preparamos una nueva con los precios al día.</p>}
+          {expired && (
+            <div className="mt-5 space-y-3">
+              <p className="body text-danger">Esta cotización venció.</p>
+              {imp.requote_requested_at ? (
+                <p role="status" className="body-sm text-ink-muted">
+                  Pediste una nueva cotización el {formatDate(imp.requote_requested_at)}. Te la enviaremos con los precios al día.
+                </p>
+              ) : (
+                <>
+                  <p className="body-sm text-ink-muted">Pídenos una nueva y te la preparamos con los precios al día. No tiene costo.</p>
+                  <Button onClick={requote} loading={busy} variant="secondary" className="w-full sm:w-auto">
+                    Pedir una nueva cotización
+                  </Button>
+                </>
+              )}
+            </div>
+          )}
         </section>
       )}
 
       {imp.status === "REQUESTED" && <p className="body text-ink-muted">Estamos revisando tu solicitud. Te avisaremos cuando tu cotización esté lista.</p>}
       {imp.status === "BALANCE_DUE" && quote && (
-        <Alert>Tu encargo ya está en Colombia. Antes de despacharlo debes pagar el saldo de {formatCOP(quote.balance_cop)}; nuestro equipo te contacta para coordinarlo.</Alert>
+        <section aria-labelledby="im-balance" className="bg-surface-raised border-brand border-2 p-5">
+          <h3 id="im-balance" className="label">
+            Saldo
+          </h3>
+          {imp.balance_paid ? (
+            <p role="status" className="text-success body mt-3 flex items-start gap-2">
+              <CheckCircle2 className="mt-0.5 size-5 shrink-0" strokeWidth={1.5} aria-hidden />
+              Recibimos tu saldo de {formatCOP(quote.balance_cop)}. Estamos preparando el despacho de tu encargo.
+            </p>
+          ) : quote.balance_cod_allowed ? (
+            <p className="body mt-3">
+              Tu encargo ya está en Colombia. El saldo de <span className="body-strong">{formatCOP(quote.balance_cop)}</span> lo pagas contra entrega, como acordamos.
+            </p>
+          ) : (
+            <div className="mt-3 space-y-3">
+              <p className="body">
+                ¡Tu encargo ya está en Colombia! Para despacharlo, paga el saldo de <span className="body-strong">{formatCOP(quote.balance_cop)}</span>.
+              </p>
+              <Button onClick={payOnly} loading={busy} className="w-full sm:w-auto">
+                Pagar saldo de {formatCOP(quote.balance_cop)}
+              </Button>
+            </div>
+          )}
+        </section>
       )}
 
       <section aria-labelledby="im-track" className="bg-surface-raised border-line border p-5">

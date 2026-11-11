@@ -238,6 +238,59 @@ func (s *Service) Get(ctx context.Context, id uuid.UUID, admin bool) (*RequestRe
 	return &out, nil
 }
 
+// acceptedQuote es la cotización que el cliente aceptó (la de la que salen anticipo y saldo).
+func acceptedQuote(r *models.ImportRequest) *models.ImportQuote {
+	for i := range r.Quotes {
+		if r.Quotes[i].Status == models.QuoteAccepted {
+			return &r.Quotes[i]
+		}
+	}
+	return nil
+}
+
+// balanceOwed: el encargo espera un saldo que aún no se pagó ni se exoneró (contra entrega acordado).
+func balanceOwed(r *models.ImportRequest) bool {
+	q := acceptedQuote(r)
+	return r.Status == models.ImportBalanceDue && q != nil && q.BalanceCOP > 0 && !q.BalanceCODAllowed && !r.BalancePaid
+}
+
+// Requote: el cliente pide una cotización nueva cuando la suya venció. No cambia el estado (la máquina de estados
+// no vuelve a REQUESTED): marca la petición, que aparece en la bandeja del equipo hasta que emita la nueva.
+func (s *Service) Requote(ctx context.Context, userID, id uuid.UUID) (*RequestResponse, error) {
+	err := s.repo.RequestRequote(ctx, id, func(r *models.ImportRequest) (*models.ImportStatusHistory, error) {
+		if r.UserID == nil || *r.UserID != userID {
+			return nil, notFoundImport()
+		}
+		expired := r.Status == models.ImportExpired
+		if r.Status == models.ImportQuoted && len(r.Quotes) > 0 {
+			q := r.Quotes[0]
+			expired = q.Status == models.QuoteExpired || (q.Status == models.QuoteSent && q.IsExpired(time.Now()))
+		}
+		if !expired {
+			return nil, apperr.New(apperr.KindConflict, "REQUOTE_NOT_NEEDED", "Tu cotización sigue vigente: no necesitas pedir una nueva.")
+		}
+		if r.RequoteRequestedAt != nil {
+			return nil, apperr.New(apperr.KindConflict, "REQUOTE_ALREADY_REQUESTED", "Ya pediste una nueva cotización. Te respondemos pronto.")
+		}
+		now := time.Now().UTC()
+		r.RequoteRequestedAt = &now
+		return &models.ImportStatusHistory{
+			Status: r.Status, NotifyCustomer: true, ChangedByID: &userID,
+			Note: "Pediste una nueva cotización. Te la enviaremos con los precios al día.",
+		}, nil
+	})
+	if err != nil {
+		if _, ok := apperr.As(err); ok {
+			return nil, err
+		}
+		if errors.Is(err, errNotFound) {
+			return nil, notFoundImport()
+		}
+		return nil, apperr.Internal(err)
+	}
+	return s.GetMine(ctx, userID, id)
+}
+
 // GetMine devuelve el detalle de un encargo del cliente. Si no existe o es de otra persona responde
 // lo mismo (404), para no revelar qué códigos existen.
 func (s *Service) GetMine(ctx context.Context, userID, id uuid.UUID) (*RequestResponse, error) {
@@ -273,6 +326,18 @@ func (s *Service) ChangeStatus(ctx context.Context, id, adminID uuid.UUID, in Ch
 				fmt.Sprintf("No se puede pasar un encargo de «%s» a «%s».", statusLabel(r.Status), statusLabel(to))).
 				WithDetails(map[string]any{"from": r.Status, "to": to, "allowed": allowed})
 		}
+		// «Nada se despacha sin que el saldo esté al día» (SSD §10.6): sin saldo pagado en la web, el equipo debe
+		// confirmar que lo recibió por otro medio. La excepción queda escrita en el historial.
+		note := strings.TrimSpace(in.Note)
+		if r.Status == models.ImportBalanceDue && to == models.ImportOutForDelivery && balanceOwed(r) {
+			if !in.ConfirmBalanceReceived {
+				q := acceptedQuote(r)
+				return nil, apperr.New(apperr.KindConflict, "BALANCE_NOT_PAID",
+					fmt.Sprintf("El cliente aún no paga el saldo de %s. Espera su pago en la web o confirma que lo recibiste por otro medio.", formatCOP(q.BalanceCOP))).
+					WithDetails(map[string]any{"balance_cop": q.BalanceCOP})
+			}
+			note = strings.TrimSpace("Saldo confirmado por el equipo (sin pago en la web). " + note)
+		}
 		r.Status = to
 		if in.CarrierUSA != nil {
 			r.CarrierUSA = strings.TrimSpace(*in.CarrierUSA)
@@ -291,7 +356,7 @@ func (s *Service) ChangeStatus(ctx context.Context, id, adminID uuid.UUID, in Ch
 			r.ETA = &eta
 		}
 		return &models.ImportStatusHistory{
-			Status: to, Note: strings.TrimSpace(in.Note),
+			Status: to, Note: note,
 			NotifyCustomer: in.NotifyCustomer == nil || *in.NotifyCustomer,
 			ChangedByID:    &adminID,
 		}, nil
@@ -327,7 +392,9 @@ func toResponse(r *models.ImportRequest, admin, detail bool) RequestResponse {
 		CustomerNotes: r.CustomerNotes, CarrierUSA: r.CarrierUSA, TrackingUSA: r.TrackingUSA,
 		TrackingCO: r.TrackingCO, WeightLb: r.WeightLb, ETA: r.ETA, ItemCount: len(r.Items),
 		CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
+		BalancePaid: r.BalancePaid, RequoteRequestedAt: r.RequoteRequestedAt,
 	}
+	out.BalanceBlocksDispatch = admin && balanceOwed(r)
 	if admin && r.User != nil {
 		out.Customer = &CustomerRef{ID: r.User.ID, FullName: r.User.FullName, Email: r.User.Email,
 			Phone: r.User.Phone, DocumentID: r.User.DocumentID}

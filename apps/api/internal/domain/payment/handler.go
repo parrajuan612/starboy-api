@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -33,6 +34,7 @@ func NewHandler(svc *Service, simulatorOnline bool) *Handler {
 // RegisterRoutes monta /payments. El webhook es público: se autentica con la firma, no con JWT.
 func (h *Handler) RegisterRoutes(rg *gin.RouterGroup, authMW, writeLimiter gin.HandlerFunc) {
 	g := rg.Group("/payments")
+	g.GET("/providers", h.providers)
 	g.POST("/checkout", authMW, writeLimiter, h.checkout)
 	g.POST("/webhook/:provider", h.webhook)
 	g.GET("/:id", authMW, h.get)
@@ -70,6 +72,13 @@ func (h *Handler) checkout(c *gin.Context) {
 		return
 	}
 	response.JSON(c, http.StatusCreated, out)
+}
+
+// providers dice qué pasarelas están habilitadas: la web lo usa para ofrecer solo lo que existe.
+func (h *Handler) providers(c *gin.Context) {
+	out := h.svc.Enabled()
+	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	response.JSON(c, http.StatusOK, out)
 }
 
 func (h *Handler) get(c *gin.Context) {

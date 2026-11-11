@@ -84,6 +84,10 @@ type ImportRequest struct {
 	TrackingCO    string     `gorm:"type:varchar(120)" json:"tracking_co,omitempty"`
 	WeightLb      float64    `gorm:"type:numeric(8,2);not null;default:0" json:"weight_lb"` // peso real, no es dinero
 	ETA           *time.Time `json:"eta,omitempty"`
+	// RequoteRequestedAt: el cliente pidió una cotización nueva (la anterior venció). La emisión de una cotización lo limpia.
+	RequoteRequestedAt *time.Time `json:"requote_requested_at,omitempty"`
+	// BalancePaid es calculado al leer (hay un pago BALANCE aprobado); no es una columna.
+	BalancePaid bool `gorm:"-" json:"-"`
 
 	Items   []ImportRequestItem   `gorm:"constraint:OnDelete:CASCADE" json:"items,omitempty"`
 	Quotes  []ImportQuote         `gorm:"constraint:OnDelete:CASCADE" json:"quotes,omitempty"`

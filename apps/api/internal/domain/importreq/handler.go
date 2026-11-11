@@ -25,6 +25,7 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup, authMW, publicLimiter, wri
 	g.POST("", authMW, writeLimiter, h.create)
 	g.GET("/my-requests", authMW, h.myRequests)
 	g.GET("/:id", authMW, h.getMine)
+	g.POST("/:id/requote", authMW, writeLimiter, h.requote)
 	g.POST("/:id/quotes/:quoteId/accept", authMW, writeLimiter, h.acceptQuote)
 }
 
@@ -38,6 +39,23 @@ func (h *Handler) getMine(c *gin.Context) {
 		return
 	}
 	out, err := h.svc.GetMine(c.Request.Context(), uid, id)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.JSON(c, http.StatusOK, out)
+}
+
+func (h *Handler) requote(c *gin.Context) {
+	uid, ok := currentUserID(c)
+	if !ok {
+		return
+	}
+	id, ok := idParam(c)
+	if !ok {
+		return
+	}
+	out, err := h.svc.Requote(c.Request.Context(), uid, id)
 	if err != nil {
 		response.Fail(c, err)
 		return

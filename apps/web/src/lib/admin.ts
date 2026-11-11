@@ -21,6 +21,8 @@ export interface ImportStatusInput {
   carrier_usa?: string;
   tracking_usa?: string;
   tracking_co?: string;
+  /** Confirma que el saldo se recibió por otro medio (permite despachar sin pago en la web). */
+  confirm_balance_received?: boolean;
 }
 export const changeImportStatus = (id: string, input: ImportStatusInput) =>
   http.patch<ImportRequest>(`/admin/imports/${id}/status`, input);

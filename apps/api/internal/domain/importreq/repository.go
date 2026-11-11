@@ -44,6 +44,9 @@ type Repository interface {
 	// junto con su entrada de historial en la misma transacción.
 	ChangeStatus(ctx context.Context, id uuid.UUID,
 		apply func(r *models.ImportRequest) (*models.ImportStatusHistory, error)) error
+	// RequestRequote bloquea el encargo y deja que `apply` valide y marque la petición de nueva cotización.
+	RequestRequote(ctx context.Context, id uuid.UUID,
+		apply func(r *models.ImportRequest) (*models.ImportStatusHistory, error)) error
 
 	// CreateQuote emite una versión nueva: bloquea el encargo, invalida las cotizaciones SENT
 	// anteriores, guarda la cotización, mueve el encargo a QUOTED y escribe el historial.
@@ -125,9 +128,18 @@ func (r *gormRepository) List(ctx context.Context, f ListFilter) ([]models.Impor
 		q = q.Preload("History", orderedHistory)
 	}
 	var items []models.ImportRequest
-	err := q.Order("import_requests.created_at DESC, import_requests.id").
-		Offset(f.Offset).Limit(f.Limit).Find(&items).Error
-	return items, total, err
+	if err := q.Order("import_requests.created_at DESC, import_requests.id").
+		Offset(f.Offset).Limit(f.Limit).Find(&items).Error; err != nil {
+		return nil, 0, err
+	}
+	ptrs := make([]*models.ImportRequest, len(items))
+	for i := range items {
+		ptrs[i] = &items[i]
+	}
+	if err := markBalancePaid(r.db.WithContext(ctx), ptrs); err != nil {
+		return nil, 0, err
+	}
+	return items, total, nil
 }
 
 func (r *gormRepository) Get(ctx context.Context, id uuid.UUID) (*models.ImportRequest, error) {
@@ -142,7 +154,58 @@ func (r *gormRepository) Get(ctx context.Context, id uuid.UUID) (*models.ImportR
 	if err != nil {
 		return nil, err
 	}
+	if err := markBalancePaid(r.db.WithContext(ctx), []*models.ImportRequest{&req}); err != nil {
+		return nil, err
+	}
 	return &req, nil
+}
+
+// markBalancePaid marca los encargos que ya tienen un pago BALANCE aprobado.
+func markBalancePaid(db *gorm.DB, reqs []*models.ImportRequest) error {
+	if len(reqs) == 0 {
+		return nil
+	}
+	ids := make([]uuid.UUID, 0, len(reqs))
+	for _, r := range reqs {
+		ids = append(ids, r.ID)
+	}
+	var paid []uuid.UUID
+	if err := db.Model(&models.Payment{}).
+		Where("import_request_id IN ? AND kind = ? AND status = ?", ids, models.PaymentBalance, models.PaymentApproved).
+		Distinct().Pluck("import_request_id", &paid).Error; err != nil {
+		return err
+	}
+	set := make(map[uuid.UUID]bool, len(paid))
+	for _, id := range paid {
+		set[id] = true
+	}
+	for _, r := range reqs {
+		r.BalancePaid = set[r.ID]
+	}
+	return nil
+}
+
+func (r *gormRepository) RequestRequote(ctx context.Context, id uuid.UUID,
+	apply func(*models.ImportRequest) (*models.ImportStatusHistory, error)) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		req, err := lockRequest(tx, id)
+		if err != nil {
+			return err
+		}
+		if err := tx.Preload("Quotes", latestQuotesFirst).Where("id = ?", id).First(req).Error; err != nil {
+			return err
+		}
+		h, err := apply(req)
+		if err != nil {
+			return err
+		}
+		req.UpdatedAt = time.Now().UTC()
+		if err := tx.Select("requote_requested_at", "updated_at").Where("id = ?", id).Updates(req).Error; err != nil {
+			return err
+		}
+		h.ImportRequestID = id
+		return tx.Create(h).Error
+	})
 }
 
 func (r *gormRepository) ChangeStatus(ctx context.Context, id uuid.UUID,
@@ -154,6 +217,13 @@ func (r *gormRepository) ChangeStatus(ctx context.Context, id uuid.UUID,
 			return errNotFound
 		}
 		if err != nil {
+			return err
+		}
+		// La regla «no se despacha sin saldo» necesita la cotización y los pagos, leídos con el encargo bloqueado.
+		if err := tx.Preload("Quotes", latestQuotesFirst).Where("id = ?", id).First(&req).Error; err != nil {
+			return err
+		}
+		if err := markBalancePaid(tx, []*models.ImportRequest{&req}); err != nil {
 			return err
 		}
 		h, err := apply(&req)
@@ -201,7 +271,7 @@ func lockRequest(tx *gorm.DB, id uuid.UUID) (*models.ImportRequest, error) {
 
 func saveStatus(tx *gorm.DB, req *models.ImportRequest, h *models.ImportStatusHistory) error {
 	req.UpdatedAt = time.Now().UTC()
-	if err := tx.Select("status", "updated_at").Where("id = ?", req.ID).Updates(req).Error; err != nil {
+	if err := tx.Select("status", "updated_at", "requote_requested_at").Where("id = ?", req.ID).Updates(req).Error; err != nil {
 		return err
 	}
 	h.ImportRequestID = req.ID
@@ -239,6 +309,7 @@ func (r *gormRepository) CreateQuote(ctx context.Context, requestID uuid.UUID,
 		if err := tx.Create(quote).Error; err != nil {
 			return err
 		}
+		req.RequoteRequestedAt = nil // la nueva cotización atiende la petición del cliente
 		return saveStatus(tx, req, hist)
 	})
 }

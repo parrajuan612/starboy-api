@@ -107,11 +107,19 @@ func NewRouter(cfg *config.Config, db *gorm.DB) (*gin.Engine, *Services) {
 
 	// Pagos. La pasarela simulada solo existe fuera de producción: en producción no hay forma
 	// de "pagar" sin dinero. Mercado Pago se registra aquí cuando se integre.
-	var gateways []payments.Provider
-	if !cfg.IsProduction() {
-		gateways = append(gateways, payments.NewSandbox(cfg.Payments.WebhookSecret, cfg.Payments.WebBaseURL))
+	gateways, err := payments.Build(cfg.Payments.Providers, payments.Deps{
+		WebhookSecret: cfg.Payments.WebhookSecret, WebBaseURL: cfg.Payments.WebBaseURL, Production: cfg.IsProduction(),
+	})
+	if err != nil {
+		slog.Error("pasarelas de pago inválidas; el cobro no estará disponible", "error", err)
+		gateways = nil
 	}
-	paymentHandler := payment.NewHandler(payment.NewService(payment.NewRepository(db), gateways...), !cfg.IsProduction())
+	if len(gateways) == 0 {
+		slog.Warn("no hay pasarelas de pago habilitadas (PAYMENT_PROVIDERS): los cobros responderán «no disponible»")
+	}
+	paySvc := payment.NewService(payment.NewRepository(db), payment.Options{WebBaseURL: cfg.Payments.WebBaseURL, APIPublicURL: cfg.Payments.APIPublicURL}, gateways...)
+	_, sandboxOn := paySvc.Provider(models.ProviderSandbox)
+	paymentHandler := payment.NewHandler(paySvc, sandboxOn && !cfg.IsProduction())
 	paymentHandler.RegisterRoutes(api, middleware.Auth(tokens), middleware.RateLimit(10, time.Minute))
 
 	backoffice := api.Group("/admin", middleware.Auth(tokens), middleware.RequireRole(models.RoleAdmin, models.RoleStaff))

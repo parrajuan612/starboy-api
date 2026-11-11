@@ -1,6 +1,11 @@
 package importreq
 
-import "github.com/juancamiloparra/starboy-api/internal/models"
+import (
+	"fmt"
+	"strings"
+
+	"github.com/juancamiloparra/starboy-api/internal/models"
+)
 
 // statusLabels es el texto visible para el cliente (SSD §10.3, voz de marca §12.1).
 var statusLabels = map[models.ImportStatus]string{
@@ -26,4 +31,15 @@ func statusLabel(s models.ImportStatus) string {
 		return l
 	}
 	return string(s)
+}
+
+// formatCOP: 403000 -> "$403.000".
+func formatCOP(n int64) string {
+	s := fmt.Sprint(n)
+	var parts []string
+	for len(s) > 3 {
+		parts = append([]string{s[len(s)-3:]}, parts...)
+		s = s[:len(s)-3]
+	}
+	return "$" + strings.Join(append([]string{s}, parts...), ".")
 }

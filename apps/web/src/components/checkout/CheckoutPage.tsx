@@ -14,7 +14,8 @@ import { isApiError } from "@/lib/api-client";
 import { attemptKey, clearAttempt, clearDraft, loadDraft, saveDraft } from "@/lib/checkout-draft";
 import { DEPARTMENTS } from "@/lib/colombia";
 import { focusFirstInvalid, zodFieldErrors, type FieldErrors } from "@/lib/forms";
-import { confirmationPath, createOrder, createPayment, paymentPath } from "@/lib/orders";
+import { confirmationPath, createOrder, createPayment } from "@/lib/orders";
+import { goToPayment } from "@/lib/payment-redirect";
 import { checkoutSchema, EMPTY_CHECKOUT, type CheckoutForm } from "@/lib/validators/checkout";
 import { useAuthStore } from "@/store/auth";
 import { useCartStore } from "@/store/cart";
@@ -178,8 +179,7 @@ export function CheckoutPage() {
       setDone(true);
 
       try {
-        const path = paymentPath(await createPayment(order.id));
-        router.push(path ?? confirmationPath(order.id, "?pago=pendiente"));
+        if (!goToPayment(await createPayment(order.id), router)) router.push(confirmationPath(order.id, "?pago=pendiente"));
       } catch {
         // Sin pasarela por ahora: la orden queda reservada y desde su pantalla se puede pagar.
         router.push(confirmationPath(order.id, "?pago=pendiente"));

@@ -120,6 +120,21 @@ export function ImportDetailPanel({ id, onChanged }: { id: string; onChanged: ()
         </section>
       )}
 
+      {req.requote_requested_at && (
+        <p role="status" className="border-danger text-danger body-sm border p-3">
+          El cliente pidió una nueva cotización el {formatDate(req.requote_requested_at)}. Emite una cotización nueva para atenderlo.
+        </p>
+      )}
+      {req.status === "BALANCE_DUE" && q && (
+        <p className={`body-sm border p-3 ${req.balance_paid ? "border-success text-success" : "border-line"}`}>
+          {req.balance_paid
+            ? `El cliente pagó el saldo de ${formatCOP(q.balance_cop)} en la web. Ya puedes despachar.`
+            : q.balance_cod_allowed
+              ? `Saldo de ${formatCOP(q.balance_cop)} contra entrega (permitido en la cotización).`
+              : `Falta el saldo de ${formatCOP(q.balance_cop)}. No se puede despachar hasta que el cliente lo pague en la web o confirmes que lo recibiste por otro medio.`}
+        </p>
+      )}
+
       {canQuote && <QuoteForm key={`${q?.id ?? "new"}`} id={id} onDone={() => done("Cotización enviada al cliente.")} />}
 
       <StatusForm key={req.status} req={req} onDone={(t) => done(t)} />
@@ -157,8 +172,11 @@ function StatusForm({ req, onDone }: { req: ImportRequest; onDone: (t: string) =
   const [carrier, setCarrier] = useState(req.carrier_usa ?? "");
   const [trackUS, setTrackUS] = useState(req.tracking_usa ?? "");
   const [trackCO, setTrackCO] = useState(req.tracking_co ?? "");
+  const [confirmBalance, setConfirmBalance] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Despachar sin saldo pagado en la web exige confirmar que se recibió por otro medio (queda en el historial).
+  const needsBalanceConfirm = to === "OUT_FOR_DELIVERY" && !!req.balance_blocks_dispatch;
 
   if (next.length === 0) {
     return (
@@ -176,6 +194,10 @@ function StatusForm({ req, onDone }: { req: ImportRequest; onDone: (t: string) =
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!to || saving) return;
+    if (needsBalanceConfirm && !confirmBalance) {
+      setError("Confirma que recibiste el saldo por otro medio, o espera a que el cliente pague en la web.");
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -186,6 +208,7 @@ function StatusForm({ req, onDone }: { req: ImportRequest; onDone: (t: string) =
         carrier_usa: carrier.trim(),
         tracking_usa: trackUS.trim(),
         tracking_co: trackCO.trim(),
+        ...(needsBalanceConfirm ? { confirm_balance_received: true } : {}),
       });
       onDone(`Estado actualizado a «${IMPORT_LABEL[to]}».`);
     } catch (err) {
@@ -210,6 +233,12 @@ function StatusForm({ req, onDone }: { req: ImportRequest; onDone: (t: string) =
         </div>
         <Field label="Guía en Colombia" name="tracking_co" value={trackCO} onChange={(e) => setTrackCO(e.target.value)} maxLength={120} />
         <TextAreaField label="Nota (la ve el cliente si se le avisa)" name="note" value={note} onChange={(e) => setNote(e.target.value)} maxLength={1000} />
+        {needsBalanceConfirm && (
+          <label className="body border-danger flex items-start gap-3 border p-3">
+            <input type="checkbox" checked={confirmBalance} onChange={(e) => setConfirmBalance(e.target.checked)} className="accent-brand mt-0.5 size-5 shrink-0" />
+            <span>Confirmo que recibí el saldo por otro medio (transferencia o efectivo). Queda anotado en el historial.</span>
+          </label>
+        )}
         <label className="body flex min-h-11 items-center gap-3">
           <input type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} className="accent-brand size-5" />
           Avisar al cliente

@@ -134,7 +134,7 @@ await page.getByRole("button", { name: "Simular pago aprobado" }).click(); await
 await ctx.close();
 // 7b. producto retirado
 ({ ctx, page } = await newUser()); await seed(page, [line(hoodie, "M", 1), line(socks, "Única", 1)]);
-await page.route("**/api/v1/products/*", async (route) => { const r = await route.fetch(); if (r.status() !== 200) return route.fulfill({ response: r }); const j = await r.json(); j.data.variants.forEach(v => v.available = 99); route.fulfill({ response: r, json: j }); });
+await page.route("**/api/v1/products/*", async (route) => { try { const r = await route.fetch(); if (r.status() !== 200) return await route.fulfill({ response: r }); const j = await r.json(); j.data.variants.forEach(v => v.available = 99); await route.fulfill({ response: r, json: j }); } catch { /* la página ya se cerró */ } });
 await page.goto(W + "/checkout"); await page.locator("#checkout-form").waitFor(); await fill(page);
 sql("update products set status='ARCHIVED' where slug='demo-essentials-hoodie-negro'");
 const n4 = orders(); await submit(page).click(); await page.locator("#checkout-form [role=alert]").first().waitFor();
@@ -188,7 +188,8 @@ await ctx.close();
 console.log("══ 9. SEGURIDAD Y RUTAS");
 ({ ctx, page } = await newUser()); await page.goto(W + `/checkout/confirmacion/${oid2}`);
 await page.getByRole("heading", { name: "No encontramos esa orden" }).waitFor(); check("la orden de otra persona no se ve (404, sin revelar que existe)", true);
-check("id inválido → 404", (await ctx.request.get(W + "/checkout/confirmacion/hola", { headers: { Cookie: "sb_session=1" } })).status() === 404);
+// Next transmite la respuesta antes de resolver la página, así que el código HTTP es 200 aunque se muestre la página 404: se verifica el contenido.
+check("id inválido → página 404", (await (await ctx.request.get(W + "/checkout/confirmacion/hola", { headers: { Cookie: "sb_session=1" } })).text()).includes("NEXT_HTTP_ERROR_FALLBACK;404"));
 await page.goto(W + "/pago/sandbox/SBX-xyz"); await page.getByText("enlace de pago está incompleto").waitFor(); check("pasarela sin pid: mensaje claro", true);
 const pid = sql(`select id from payments where order_id='${oid2}' limit 1`);
 await page.goto(W + `/pago/sandbox/SBX-otra-ref?pid=${pid}`); await page.getByText("No encontramos este pago").waitFor(); check("pid ajeno / ref que no coincide → no encontrado", true);

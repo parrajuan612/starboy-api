@@ -1,6 +1,6 @@
 "use client";
 
-import { Boxes, ClipboardList, Globe2, Settings, Shirt, Tags } from "lucide-react";
+import { Boxes, ClipboardList, CreditCard, Globe2, Settings, Shirt, Tags } from "lucide-react";
 import Link from "next/link";
 
 import { useAuthStore } from "@/store/auth";
@@ -9,6 +9,7 @@ const CARDS = [
   { href: "/admin/ordenes", title: "Órdenes", text: "Cambia el estado, despacha y revisa los datos de facturación.", icon: ClipboardList },
   { href: "/admin/inventario", title: "Inventario", text: "Stock por talla y la bitácora de movimientos.", icon: Boxes },
   { href: "/admin/encargos", title: "Encargos USA", text: "Cotiza y sigue cada encargo hasta la entrega.", icon: Globe2 },
+  { href: "/admin/pagos", title: "Pagos", text: "Cobros de la tienda y de los encargos, y los que están en revisión.", icon: CreditCard, adminOnly: true },
   { href: "/admin/productos", title: "Productos", text: "Crea productos, tallas, stock y fotos, y publícalos en la tienda.", icon: Shirt, adminOnly: true },
   { href: "/admin/catalogo", title: "Catálogo", text: "Marcas y categorías de la tienda.", icon: Tags, adminOnly: true },
   { href: "/admin/ajustes", title: "Ajustes", text: "Dólar, comisión, impuestos y tarifas de los encargos.", icon: Settings, adminOnly: true },

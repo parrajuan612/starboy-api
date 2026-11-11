@@ -118,6 +118,12 @@ export interface ImportRequest {
   eta?: string;
   customer?: { id: string; full_name: string; email: string; phone?: string; document_id?: string };
   allowed_next?: ImportStatus[];
+  /** El saldo ya se pagó en la web. */
+  balance_paid: boolean;
+  /** Solo panel: el despacho está bloqueado hasta que se pague (o se confirme) el saldo. */
+  balance_blocks_dispatch?: boolean;
+  /** El cliente pidió una nueva cotización (la anterior venció). */
+  requote_requested_at?: string;
   quote?: ImportQuote;
   item_count: number;
   items?: ImportItem[];
