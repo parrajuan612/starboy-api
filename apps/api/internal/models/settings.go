@@ -22,3 +22,10 @@ const (
 	SettingQuoteValidityHours       = "quote_validity_hours" // 48
 	SettingFreeShippingThresholdCOP = "free_shipping_threshold_cop"
 )
+
+// SiteContent es contenido editable de la tienda (clave → documento JSON). Hoy solo la portada ("home").
+type SiteContent struct {
+	Key       string    `gorm:"type:varchar(40);primaryKey" json:"key"`
+	Value     JSONB     `gorm:"not null" json:"value"`
+	UpdatedAt time.Time `gorm:"not null" json:"updated_at"`
+}

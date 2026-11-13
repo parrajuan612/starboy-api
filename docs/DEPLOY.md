@@ -52,14 +52,19 @@ git clone https://github.com/parrajuan612/starboy-api.git starboy && cd starboy
 Genera el `.env` con secretos aleatorios. Elige **cómo se va a abrir el sitio**:
 
 ```bash
-# A) Tienes un dominio apuntado a la IP (registro A):
-bash infra/scripts/init-env.sh tienda.midominio.com correo-del-cliente@gmail.com staging
+# A) Tienes un dominio apuntado a la IP (registro A, ver «Apuntar el dominio» abajo):
+bash infra/scripts/init-env.sh starboystore.com correo-del-cliente@gmail.com staging
 
 # B) Sin dominio (HTTPS igual, usando sslip.io): para la IP 129.153.10.20 →
 bash infra/scripts/init-env.sh 129-153-10-20.sslip.io correo-del-cliente@gmail.com staging
 ```
 
 El script imprime **la contraseña del administrador una sola vez** (también queda en `.env`). Guárdala.
+
+**Apuntar el dominio** (si lo compraste en Hostinger u otro registrador): en su panel de *DNS* crea dos registros tipo **A**,
+con la **IP pública de la VM**: uno para `@` (el dominio raíz) y otro para `www`. Tarda de minutos a unas horas en propagarse.
+Comprueba con `dig +short starboystore.com` (debe devolver la IP). Hasta entonces usa la opción B (`sslip.io`).
+Ojo: borra del DNS los registros A/AAAA que traiga el registrador por defecto, o Caddy no podrá sacar el certificado.
 
 Revisa el `.env` por si quieres ajustar algo (`nano .env`). Lo importante:
 
@@ -116,7 +121,7 @@ CONFIRM=yes bash infra/scripts/restore.sh backups/db-AAAAMMDD-HHMMSS.sql.gz back
   se crea solo la primera vez; cambiar la variable después no lo modifica.
 - **Correos:** el sitio todavía no envía correos (recuperar contraseña, confirmaciones). Está en la hoja de ruta.
 - **Fotos:** se guardan en el volumen `uploads` del servidor (por eso el respaldo las incluye). Más adelante pueden pasar a Cloudinary.
-- **Pasar a producción:** cuando exista la pasarela de pago real, cambia `APP_ENV=production`, `PAYMENT_PROVIDERS=MERCADOPAGO` (u otra),
+- **Pasar a producción:** cuando exista la pasarela de pago real, cambia `APP_ENV=production`, `PAYMENT_PROVIDERS=WOMPI`,
   `PUBLIC_API_URL` y `NEXT_PUBLIC_PAYMENT_HOSTS` (ver `apps/api/internal/platform/payments/README.md`) y vuelve a construir.
   En producción la pasarela de pruebas **no arranca**.
 - **Ver qué pasa:** `docker compose -f docker-compose.prod.yml logs -f` (todos) o `... logs -f api`.

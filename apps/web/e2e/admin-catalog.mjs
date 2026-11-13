@@ -3,6 +3,7 @@ import { W, API, API_ROOT, CHROME, OUT, UPLOAD_DIR, sql } from "./env.mjs";
 import { existsSync, readdirSync, writeFileSync } from "fs";
 
 const UPLOADS = UPLOAD_DIR;
+const BASE_FILES = UPLOADS ? readdirSync(UPLOADS).length : 0; // la carpeta puede traer fotos de antes: se compara contra esta cantidad
 const browser = await chromium.launch({ executablePath: CHROME, args: ["--no-sandbox"] });
 let ok = 0, bad = 0;
 const check = (n, c, x = "") => { (c ? ok++ : bad++); console.log(`${c ? "✔" : "✘"} ${n}${x !== "" ? "  → " + x : ""}`); };
@@ -78,7 +79,7 @@ try {
     const big = await upload(ADMIN_TOK, Buffer.concat([PNG(3), Buffer.alloc(6 * 1024 * 1024)]));
     check("más de 5 MB → 422", big.status === 422 && /5 MB/.test(big.json.error.details.file));
     check("sin archivo → 422", (await fetch(API + "/admin/uploads", { method: "POST", headers: { Authorization: `Bearer ${ADMIN_TOK}` }, body: new FormData() })).status === 422);
-    check("los rechazos no dejaron archivos", readdirSync(UPLOADS).length === 1);
+    check("los rechazos no dejaron archivos", readdirSync(UPLOADS).length === BASE_FILES + 1);
   }
 
   console.log("══ 3. PERMISOS (STAFF no gestiona catálogo)");

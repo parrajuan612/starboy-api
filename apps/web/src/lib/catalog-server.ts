@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { Brand, Category, PageMeta, ProductDetail, ProductSummary } from "@/types";
+import type { Brand, Category, HomePublic, PageMeta, ProductDetail, ProductSummary } from "@/types";
 
 const API = process.env.API_URL ?? "http://localhost:8082";
 
@@ -56,3 +56,6 @@ export async function getProduct(slug: string): Promise<ProductDetail | "notfoun
   if (r.ok) return r.data.data;
   return r.status === 404 ? "notfound" : null;
 }
+
+/** Portada editable. null = la API no responde: la página muestra una portada básica en vez de romperse. */
+export const getHome = () => getData<HomePublic>("/home", LISTING_REVALIDATE);

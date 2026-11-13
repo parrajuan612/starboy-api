@@ -14,6 +14,7 @@ import (
 	"github.com/juancamiloparra/starboy-api/internal/config"
 	"github.com/juancamiloparra/starboy-api/internal/domain/auth"
 	"github.com/juancamiloparra/starboy-api/internal/domain/catalog"
+	"github.com/juancamiloparra/starboy-api/internal/domain/home"
 	"github.com/juancamiloparra/starboy-api/internal/domain/importreq"
 	"github.com/juancamiloparra/starboy-api/internal/domain/inventory"
 	"github.com/juancamiloparra/starboy-api/internal/domain/order"
@@ -70,7 +71,10 @@ func NewRouter(cfg *config.Config, db *gorm.DB) (*gin.Engine, *Services) {
 
 	user.NewHandler(user.NewService(db)).RegisterRoutes(api, middleware.Auth(tokens), middleware.RateLimit(30, time.Minute))
 
-	catalog.NewHandler(catalog.NewService(catalog.NewRepository(db))).RegisterRoutes(api)
+	catalogSvc := catalog.NewService(catalog.NewRepository(db))
+	catalog.NewHandler(catalogSvc).RegisterRoutes(api)
+	homeHandler := home.NewHandler(home.NewService(db, catalogSvc))
+	homeHandler.RegisterPublic(api)
 
 	// Panel: solo ADMIN. (STAFF tendrá sus propias rutas de inventario/órdenes en H3, sin precios.)
 	admin := api.Group("/admin", middleware.Auth(tokens), middleware.RequireRole(models.RoleAdmin))
@@ -96,6 +100,7 @@ func NewRouter(cfg *config.Config, db *gorm.DB) (*gin.Engine, *Services) {
 	}
 	catalog.NewAdminHandler(catalogAdmin).RegisterRoutes(admin)
 	settings.NewAdminHandler(settings.NewAdminService(db)).RegisterRoutes(admin)
+	homeHandler.RegisterAdmin(admin)
 
 	// Encargos USA: cotizador y solicitudes (cliente) + bandeja y estados (ADMIN y STAFF, SSD §3).
 	importSvc := importreq.NewService(importreq.NewRepository(db), settings.NewService(settings.NewReader(db)))

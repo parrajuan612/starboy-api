@@ -24,6 +24,7 @@ func Models() []any {
 		&models.ImportQuote{},
 		&models.ImportStatusHistory{},
 		&models.Setting{},
+		&models.SiteContent{},
 		&models.Order{},
 		&models.OrderItem{},
 		&models.OrderStatusHistory{},

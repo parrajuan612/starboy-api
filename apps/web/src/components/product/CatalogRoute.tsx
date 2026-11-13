@@ -15,6 +15,8 @@ interface RouteProps {
   title: string;
   intro?: string;
   gender?: "MEN" | "WOMEN";
+  /** Solo nuevos lanzamientos o solo con descuento. */
+  flag?: "new" | "sale";
   /** Categoría raíz fija de la sección (ej. "accesorios"): los segmentos de la URL son sus hijas. */
   rootCategory?: string;
   /** Segmentos de la URL después de `base` (/hombre/zapatos/sneakers → ["zapatos","sneakers"]). */
@@ -69,7 +71,7 @@ export async function CatalogRoute(p: RouteProps) {
 
   const filters = parseFilters(p.searchParams);
   const leaf = r.chain.at(-1) ?? r.fixed.at(-1);
-  const scope: Scope = { gender: p.gender, category: leaf?.slug };
+  const scope: Scope = { gender: p.gender, category: leaf?.slug, flag: p.flag };
   const path = href(p.base, r.chain);
 
   const crumbs: Crumb[] = [{ label: "Inicio", href: "/" }, { label: p.title, href: p.base }];

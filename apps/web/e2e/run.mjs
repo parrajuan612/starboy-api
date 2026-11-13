@@ -8,8 +8,11 @@ import { readdirSync } from "node:fs";
 const ALL = readdirSync(new URL(".", import.meta.url)).filter((f) => f.endsWith(".mjs") && !["env.mjs", "run.mjs"].includes(f)).map((f) => f.replace(".mjs", "")).sort();
 const wanted = process.argv.slice(2);
 const names = wanted.length ? wanted : ALL.filter((n) => n !== "checkout" || process.env.RESTART_API_CMD);
+// El login/registro tiene un límite de 10 por minuto por IP: se espacian los grupos para no agotarlo (E2E_GAP_MS=0 lo desactiva).
+const GAP = Number(process.env.E2E_GAP_MS ?? 61000);
 let failed = 0;
-for (const n of names) {
+for (const [i, n] of names.entries()) {
+  if (i > 0 && GAP > 0) await new Promise((r) => setTimeout(r, GAP));
   if (!ALL.includes(n)) { console.error(`No existe «${n}». Disponibles: ${ALL.join(", ")}`); process.exit(2); }
   console.log(`\n████ ${n}`);
   const r = spawnSync("node", [new URL(`./${n}.mjs`, import.meta.url).pathname], { stdio: ["ignore", "pipe", "inherit"], encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });

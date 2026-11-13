@@ -53,7 +53,7 @@ console.log("══ 1. PERFIL");
   await login(page, cust.email, "clave-segura-1", "?next=%2Fcuenta");
   await page.getByRole("heading", { name: "Datos personales" }).waitFor();
   const tabs = await page.locator('nav[aria-label="Mi cuenta"] a').allInnerTexts();
-  check("pestañas Perfil, Direcciones y Mis pedidos", tabs.join("|").toLowerCase() === "perfil|direcciones|mis pedidos", tabs.join("|"));
+  check("pestañas Perfil, Direcciones, Mis pedidos y Mis encargos", tabs.join("|").toLowerCase() === "perfil|direcciones|mis pedidos|mis encargos", tabs.join("|"));
   check("pestaña activa con aria-current", (await page.locator('nav[aria-label="Mi cuenta"] a[aria-current="page"]').innerText()).toLowerCase() === "perfil");
   check("precarga nombre y celular", (await page.locator('[name="full_name"]').inputValue()) === "Camila Rojas" && (await page.locator('[name="phone"]').inputValue()) === "3001234567");
   check("correo visible pero no editable", await page.locator('[name="email"]').isDisabled());

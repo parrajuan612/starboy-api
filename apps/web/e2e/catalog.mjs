@@ -1,5 +1,7 @@
 import { chromium } from "playwright-core";
 import { W, API, API_ROOT, CHROME, OUT, UPLOAD_DIR, sql } from "./env.mjs";
+// Agregar desde la ficha abre el panel del carrito (modal): se cierra antes de seguir interactuando con la página.
+const closeDrawer = async (page) => { if (await page.locator("dialog[open]").count()) { await page.keyboard.press("Escape"); await page.locator("dialog[open]").waitFor({ state: "detached", timeout: 3000 }).catch(() => {}); } };
 const browser = await chromium.launch({ executablePath: CHROME, args: ["--no-sandbox"] });
 let ok = 0, bad = 0;
 const check = (n, c, x = "") => { (c ? ok++ : bad++); console.log(`${c ? "✔" : "✘"} ${n}${x !== "" ? "  → " + x : ""}`); };
@@ -107,7 +109,7 @@ const chips = group.locator("button"); check("7 tallas", await chips.count() ===
 const sold = group.getByRole("button", { name: "Talla 40, agotada" });
 check("talla sin stock: aria-disabled, tachada y deshabilitada", await sold.getAttribute("aria-disabled") === "true" && (await sold.evaluate(e => getComputedStyle(e).textDecorationLine)) === "line-through");
 await sold.click({ force: true }); check("clic en agotada no la selecciona", await sold.getAttribute("aria-pressed") === "false");
-await page.getByRole("button", { name: "Agregar al carrito" }).click();
+await closeDrawer(page); await page.getByRole("button", { name: "Agregar al carrito" }).click();
 check("sin talla: pide elegirla y mueve el foco", await page.getByText("Elige tu talla para continuar.").isVisible() && await page.evaluate(() => document.activeElement?.closest(".sb-size-selector") !== null));
 await group.getByRole("button", { name: "Talla 43" }).click();
 check("talla con 1 unidad: «¡Última unidad!»", await page.getByText("¡Última unidad!").isVisible());
@@ -121,28 +123,28 @@ console.log("— Carrito (límite por línea y por stock)");
 const plus = page.getByRole("button", { name: "Agregar una unidad" });
 for (let i = 0; i < 6; i++) if (await plus.isEnabled()) await plus.click();
 check("cantidad tope = stock de la talla (4)", await page.locator("output").innerText() === "4" && await plus.isDisabled());
-await page.getByRole("button", { name: "Agregar al carrito" }).click();
+await closeDrawer(page); await page.getByRole("button", { name: "Agregar al carrito" }).click();
 const cart = () => page.evaluate(() => JSON.parse(localStorage.getItem("sb-cart")).state.lines);
 let lines = await cart();
 check("Zustand: línea con 4 unidades de la talla 38", lines.length === 1 && lines[0].quantity === 4 && lines[0].size === "38" && lines[0].unitPriceCOP === 1249900 && lines[0].productSlug === "demo-jordan-4-retro-white-oreo", JSON.stringify(lines[0]).slice(0, 150));
-check("mensaje de confirmación con enlace al carrito", await page.getByText(/Agregaste 4 unidades \(talla 38\)/).isVisible() && await page.getByRole("link", { name: "Ver carrito" }).isVisible());
+check("mensaje de confirmación con enlace al carrito", await page.getByText(/Agregaste 4 unidades \(talla 38\)/).isVisible() && await page.locator("main").getByRole("link", { name: "Ver carrito" }).isVisible());
 check("badge del header = 4", await page.getByRole("button", { name: /Carrito, 4 productos/ }).isVisible());
-await page.getByRole("button", { name: "Agregar al carrito" }).click();
+await closeDrawer(page); await page.getByRole("button", { name: "Agregar al carrito" }).click();
 check("ya tiene todas las unidades de la talla → mensaje, sin agregar", await page.getByText(/todas las unidades disponibles de esta talla \(4\)/).isVisible() && (await cart())[0].quantity === 4);
 
 await page.goto(W + "/producto/demo-essentials-hoodie-negro");
 await page.getByRole("group", { name: /Talla/ }).getByRole("button", { name: "Talla M", exact: true }).click(); // stock 10
 for (let i = 0; i < 12; i++) if (await page.getByRole("button", { name: "Agregar una unidad" }).isEnabled()) await page.getByRole("button", { name: "Agregar una unidad" }).click();
 check("cantidad tope = 10 por línea", await page.locator("output").innerText() === "10");
-await page.getByRole("button", { name: "Agregar al carrito" }).click();
+await closeDrawer(page); await page.getByRole("button", { name: "Agregar al carrito" }).click();
 lines = await cart(); check("línea de 10 unidades", lines.find(l => l.size === "M")?.quantity === 10);
-await page.getByRole("button", { name: "Agregar al carrito" }).click();
+await closeDrawer(page); await page.getByRole("button", { name: "Agregar al carrito" }).click();
 check("más de 10 en total: bloqueado con mensaje", await page.getByText(/el máximo por producto es 10/).isVisible() && (await cart()).find(l => l.size === "M").quantity === 10);
 
 console.log("— Disponibilidad en vivo");
 await page.goto(W + "/producto/demo-nike-dunk-low-panda");
 await page.getByRole("group", { name: /Talla/ }).getByRole("button", { name: "Talla 41", exact: true }).click();
-check("antes: talla 41 en stock", await page.getByText("En stock", { exact: true }).isVisible());
+check("antes: talla 41 con stock (3 unidades: aviso de pocas)", await page.getByText(/En stock|Últimas 3 unidades/).first().isVisible());
 sql("update product_variants set stock_on_hand = 0 where sku = 'DEMO-NIKE-DUNK-LOW-PANDA-41'");
 await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
 await page.getByText("Esa talla se acaba de agotar. Elige otra.").waitFor({ timeout: 5000 });
@@ -150,7 +152,7 @@ check("otro cliente la agota: la ficha lo detecta, deselecciona y avisa", await 
 sql("update product_variants set stock_on_hand = 3 where sku = 'DEMO-NIKE-DUNK-LOW-PANDA-41'");  // 3 era el valor sembrado para esa talla (6,4,8,3,0,2,5 → 41=3)
 await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange"))); await page.waitForTimeout(600);
 check("al reponerse vuelve a estar disponible", await page.getByRole("button", { name: "Talla 41", exact: true }).getAttribute("aria-disabled") === null);
-check("promoción en la ficha: -17% y precio tachado", await page.locator(".sb-badge--discount").first().innerText() === "-17%" && (await page.locator("main s").first().innerText()).includes("699.900"));
+{ const b = await page.locator(".sb-badge--discount").allInnerTexts(); const st = await page.locator("main s").allInnerTexts(); check("promoción en la ficha: -17% y precio tachado", b.includes("-17%") && st.some((t) => t.includes("699.900")), JSON.stringify({ b, st, url: page.url() })); }
 
 console.log("— Agotado y errores");
 await page.goto(W + "/producto/demo-adidas-gazelle-bold");
@@ -169,7 +171,7 @@ check("sin scroll horizontal", !(await page.evaluate(() => document.documentElem
 check("grilla de 2 columnas", await page.locator("ul.grid li").evaluateAll(l => new Set(l.map(e => Math.round(e.getBoundingClientRect().left))).size) === 2);
 check("columna lateral oculta; botón Filtros visible", !(await page.locator("aside").isVisible()) && await page.getByRole("button", { name: /Filtros/ }).isVisible());
 await page.getByRole("button", { name: /Filtros/ }).click();
-const dlg = page.locator("dialog.sb-filterdrawer"); await dlg.waitFor();
+const dlg = page.locator('dialog.sb-filterdrawer:not([aria-label="Carrito de compras"])'); await dlg.waitFor();
 check("drawer de filtros abre y no desborda", await dlg.evaluate(d => d.open && d.scrollWidth <= d.clientWidth));
 await dlg.locator("#m-marca").selectOption("jordan"); await dlg.getByRole("button", { name: "Filtrar" }).click();
 await page.waitForURL(/marca=jordan/);

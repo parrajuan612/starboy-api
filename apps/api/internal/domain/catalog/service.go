@@ -3,6 +3,7 @@ package catalog
 import (
 	"context"
 	"errors"
+	"sort"
 	"strings"
 
 	"github.com/juancamiloparra/starboy-api/internal/apperr"
@@ -41,6 +42,8 @@ func (s *Service) ListProducts(ctx context.Context, q ListQuery) ([]ProductSumma
 		BrandSlug:    strings.ToLower(strings.TrimSpace(q.Brand)),
 		Origin:       q.Origin,
 		Search:       strings.TrimSpace(q.Q),
+		OnlyNew:      q.New,
+		OnlySale:     q.Sale,
 		MinPrice:     q.MinPrice,
 		MaxPrice:     q.MaxPrice,
 		Sort:         SortOrder(q.Sort),
@@ -155,4 +158,50 @@ func toSummary(p *models.Product) ProductSummary {
 
 func toImage(i models.ProductImage) ImageResponse {
 	return ImageResponse{ID: i.ID, URL: i.URL, Alt: i.Alt, Position: i.Position}
+}
+
+// Selection pide productos para la portada: los nuevos lanzamientos, los destacados, los que tienen
+// descuento o una lista de slugs (en ese orden). Solo salen productos visibles.
+type Selection struct {
+	Kind  string // NEW_RELEASES | FEATURED | ON_SALE | PICKED
+	Slugs []string
+	Limit int
+}
+
+// Select devuelve los productos de una Selection.
+func (s *Service) Select(ctx context.Context, sel Selection) ([]ProductSummary, error) {
+	limit := sel.Limit
+	if limit < 1 || limit > maxLimit {
+		limit = 12
+	}
+	f := ProductFilter{Sort: SortNewest, Limit: limit}
+	switch sel.Kind {
+	case "NEW_RELEASES":
+		f.OnlyNew = true
+	case "FEATURED":
+		f.OnlyFeatured = true
+	case "ON_SALE":
+		f.OnlySale = true
+	case "PICKED":
+		if len(sel.Slugs) == 0 {
+			return []ProductSummary{}, nil
+		}
+		f.Slugs = sel.Slugs
+	}
+	items, _, err := s.repo.ListProducts(ctx, f)
+	if err != nil {
+		return nil, apperr.Internal(err)
+	}
+	out := make([]ProductSummary, 0, len(items))
+	for i := range items {
+		out = append(out, toSummary(&items[i]))
+	}
+	if sel.Kind == "PICKED" { // respeta el orden elegido en el panel
+		pos := make(map[string]int, len(sel.Slugs))
+		for i, sl := range sel.Slugs {
+			pos[sl] = i
+		}
+		sort.SliceStable(out, func(a, b int) bool { return pos[out[a].Slug] < pos[out[b].Slug] })
+	}
+	return out, nil
 }

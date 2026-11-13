@@ -57,6 +57,8 @@ export interface Scope {
   category?: string;
   /** Marca fija de la ruta (/marcas/nike). */
   brand?: string;
+  /** Solo nuevos lanzamientos (/nuevos) o solo con descuento (/promociones). */
+  flag?: "new" | "sale";
 }
 
 /** Parámetros para GET /products. El género MEN/WOMEN ya incluye UNISEX en la API. */
@@ -64,6 +66,8 @@ export function toApiQuery(scope: Scope, f: Filters): URLSearchParams {
   const p = new URLSearchParams({ limit: String(PAGE_SIZE), page: String(f.pagina), sort: SORTS.find((s) => s.value === f.orden)!.api });
   if (scope.gender) p.set("gender", scope.gender);
   if (scope.category) p.set("category", scope.category);
+  if (scope.flag === "new") p.set("new", "true");
+  if (scope.flag === "sale") p.set("sale", "true");
   const brand = scope.brand ?? f.marca;
   if (brand) p.set("brand", brand);
   if (f.min !== undefined) p.set("min_price", String(f.min));

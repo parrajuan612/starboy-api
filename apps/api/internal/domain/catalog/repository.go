@@ -33,6 +33,8 @@ type ProductFilter struct {
 	MinPrice, MaxPrice                              *int64
 	Sort                                            SortOrder
 	Offset, Limit                                   int
+	OnlyNew, OnlyFeatured, OnlySale                 bool     // marcas del admin: nuevo lanzamiento, destacado, con descuento
+	Slugs                                           []string // solo estos productos (la portada los pide por nombre)
 }
 
 // Repository es el acceso a datos del catálogo público.
@@ -86,6 +88,18 @@ func (r *gormRepository) ListProducts(ctx context.Context, f ProductFilter) ([]m
 		}
 		if f.MaxPrice != nil {
 			q = q.Where("products.base_price_cop <= ?", *f.MaxPrice)
+		}
+		if f.OnlyNew {
+			q = q.Where("products.is_new_release")
+		}
+		if f.OnlyFeatured {
+			q = q.Where("products.is_featured")
+		}
+		if f.OnlySale {
+			q = q.Where("products.compare_at_price_cop > products.base_price_cop")
+		}
+		if f.Slugs != nil {
+			q = q.Where("products.slug IN ?", f.Slugs)
 		}
 		if f.Search != "" {
 			q = q.Where("products.name ILIKE ?", "%"+escapeLike(f.Search)+"%")

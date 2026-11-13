@@ -21,6 +21,8 @@ type ListQuery struct {
 	Q        string `form:"q" binding:"omitempty,max=100"`
 	MinPrice *int64 `form:"min_price" binding:"omitempty,gte=0"`
 	MaxPrice *int64 `form:"max_price" binding:"omitempty,gte=0"`
+	New      bool   `form:"new"`  // solo nuevos lanzamientos
+	Sale     bool   `form:"sale"` // solo con descuento
 	Sort     string `form:"sort" binding:"omitempty,oneof=newest price_asc price_desc"`
 	Page     int    `form:"page" binding:"omitempty,gte=1"`
 	Limit    int    `form:"limit" binding:"omitempty,gte=1,lte=50"`

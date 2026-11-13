@@ -5,3 +5,4 @@ export * from "./account";
 export * from "./admin";
 export * from "./imports";
 export * from "./catalog-admin";
+export * from "./home";

@@ -1,6 +1,6 @@
 "use client";
 
-import { Boxes, ClipboardList, CreditCard, Globe2, LayoutDashboard, Settings, Shirt, Tags } from "lucide-react";
+import { Boxes, ClipboardList, CreditCard, Globe2, House, LayoutDashboard, Settings, Shirt, Tags } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -14,6 +14,7 @@ const ITEMS = [
   { href: "/admin/encargos", label: "Encargos USA", icon: Globe2 },
   // Gestión del catálogo y del negocio: solo ADMIN (la API lo exige igualmente).
   { href: "/admin/pagos", label: "Pagos", icon: CreditCard, adminOnly: true },
+  { href: "/admin/inicio", label: "Inicio", icon: House, adminOnly: true },
   { href: "/admin/productos", label: "Productos", icon: Shirt, adminOnly: true },
   { href: "/admin/catalogo", label: "Catálogo", icon: Tags, adminOnly: true },
   { href: "/admin/ajustes", label: "Ajustes", icon: Settings, adminOnly: true },
